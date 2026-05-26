@@ -1,0 +1,36 @@
+{
+  "ClientId": "Boozt",
+  "Description": "Boozt Fashion AB via Nexmart",
+  "Enabled": true,
+
+  "Ftp": {
+    "Host": "ftp.nexmart.com",
+    "Port": 21,
+    "User": "usuario_boozt",
+    "Password": "password_boozt",
+    "RemoteFolderOrders": "/transactions/orders/out",
+    "FilePrefix": "ERE1C."
+  },
+
+  "Paths": {
+    "OrdersInbox":     "C:\\EDI_Conector_FC\\Boozt\\Orders\\Inbox",
+    "OrdersCsv":       "C:\\EDI_Conector_FC\\Boozt\\Orders\\CSV",
+    "OrdersProcessed": "C:\\EDI_Conector_FC\\Boozt\\Orders\\Processed",
+    "OrdersError":     "C:\\EDI_Conector_FC\\Boozt\\Orders\\Error"
+  },
+
+  "SapDefaults": {
+    "CardCode":       "C_BOOZT",
+    "WarehouseCode":  "12",
+    "SlpCode":        3,
+    "Currency":       "EUR",
+    "GroupNumber":    5,
+    "PaymentMethod":  "PAGARE",
+    "Transportista":  8,
+    "CommentsPrefix": "EDI Boozt"
+  },
+
+  "Parser": {
+    "EanPadToLength": 13
+  }
+}

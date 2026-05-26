@@ -1,114 +1,132 @@
-﻿using EDI_Conector_FC.Jobs;
+using EDI_Conector_FC.Jobs;
 using EDI_Conector_FC.Models;
 using EDI_Conector_FC.Models.SapModels;
+using EDI_Conector_FC.Services.ClientConfig;
+using EDI_Conector_FC.Services.CsvGenerator;
+using EDI_Conector_FC.Services.CsvImporter;
 using EDI_Conector_FC.Services.OrdersIn;
 using EDI_Conector_FC.Services.Remote;
 using EDI_Conector_FC.Services.ServiceSAP;
 using EDI_Conector_FC.Services.ServiceSAP.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Quartz;
 using Serilog;
 
 var builder = Host.CreateApplicationBuilder(args);
 
-// Forzar lectura del appsettings.json desde el output (bin/Debug/net8.0)
 builder.Configuration
-	.SetBasePath(AppContext.BaseDirectory)
-	.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
+    .SetBasePath(AppContext.BaseDirectory)
+    .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
 
-// Serilog a consola
+// ── Serilog ───────────────────────────────────────────────────────────────────
 Log.Logger = new LoggerConfiguration()
-	.WriteTo.Console()
-	.CreateLogger();
+    .WriteTo.Console()
+    .WriteTo.File(
+        path: Path.Combine(
+            builder.Configuration["Logging:LogPath"] ?? "C:\\EDI_Conector_FC\\Logs",
+            "edi_conector_.log"),
+        rollingInterval: RollingInterval.Day,
+        retainedFileCountLimit: 30)
+    .CreateLogger();
 
 builder.Services.AddSerilog();
 
-// ---- Options ----
+// ── Options ───────────────────────────────────────────────────────────────────
 builder.Services.Configure<JobsOptions>(builder.Configuration.GetSection("Jobs"));
 builder.Services.Configure<QuartzScheduleOptions>(builder.Configuration.GetSection("Quartz"));
 builder.Services.Configure<PathsOptions>(builder.Configuration.GetSection("Paths"));
 builder.Services.Configure<SapOptions>(builder.Configuration.GetSection("LoginSAP"));
-
-// ---- DI Service Layer (igual que tu patrón bueno) ----
-builder.Services.AddSingleton<ServiceLoginSL>();
-builder.Services.AddSingleton<ServiceLayerClient>();
-
-builder.Services.AddSingleton<IItemResolverService, ItemResolverService>();
-
-builder.Services.AddScoped<IOrdersInProcessor, OrdersInProcessor>();
-builder.Services.AddSingleton<IEre1OrdersParser, Ere1OrdersParser>();
-
-//Conexion FTP
 builder.Services.Configure<FtpOptions>(builder.Configuration.GetSection("Ftp"));
-builder.Services.AddSingleton<IFtpService, FtpService>();
-
-
-//Docs
 builder.Services.Configure<OrdersInOptions>(builder.Configuration.GetSection("OrdersIn"));
 
+// ── SAP Service Layer ─────────────────────────────────────────────────────────
+builder.Services.AddSingleton<ServiceLoginSL>();
+builder.Services.AddSingleton<ServiceLayerClient>();
+builder.Services.AddSingleton<IItemResolverService, ItemResolverService>();
 
+// ── FTP ───────────────────────────────────────────────────────────────────────
+builder.Services.AddSingleton<IFtpService, FtpService>();         // legacy ECI
+builder.Services.AddSingleton<IFtpServiceFactory, FtpServiceFactory>(); // multi-cliente
 
+// ── Parser (compartido entre legacy y nuevo flujo) ────────────────────────────
+builder.Services.AddSingleton<IEre1OrdersParser, Ere1OrdersParser>();
 
-// ---- Quartz ----
+// ── Nuevo flujo: EDI → CSV → SAP ─────────────────────────────────────────────
+builder.Services.AddSingleton<IClientConfigLoader, ClientConfigLoader>();
+builder.Services.AddSingleton<IOrderCsvGenerator, OrderCsvGenerator>();
+builder.Services.AddSingleton<IOrderCsvReader, OrderCsvReader>();
+builder.Services.AddSingleton<IOrderCsvImporter, OrderCsvImporter>();
+
+// ── Procesador legacy ECI ─────────────────────────────────────────────────────
+builder.Services.AddScoped<IOrdersInProcessor, OrdersInProcessor>();
+
+// ── Quartz ────────────────────────────────────────────────────────────────────
 builder.Services.AddQuartz(q =>
 {
-	var jobs = builder.Configuration.GetSection("Jobs").Get<JobsOptions>() ?? new JobsOptions();
-	var cron = builder.Configuration.GetSection("Quartz").Get<QuartzScheduleOptions>() ?? new QuartzScheduleOptions();
+    var jobs = builder.Configuration.GetSection("Jobs").Get<JobsOptions>() ?? new JobsOptions();
+    var cron = builder.Configuration.GetSection("Quartz").Get<QuartzScheduleOptions>() ?? new QuartzScheduleOptions();
 
-	if (jobs.JobOrdersIn)
-	{
-		var jobKey = new JobKey(nameof(JobOrdersIn));
-		q.AddJob<JobOrdersIn>(opts => opts.WithIdentity(jobKey));
-		q.AddTrigger(opts => opts
-			.ForJob(jobKey)
-			.WithIdentity($"{nameof(JobOrdersIn)}Trigger")
-			.WithCronSchedule(cron.JobOrdersIn));
-	}
+    // ── Job legacy: ECI directo a SAP ────────────────────────────────────────
+    if (jobs.JobOrdersIn)
+    {
+        var key = new JobKey(nameof(JobOrdersIn));
+        q.AddJob<JobOrdersIn>(o => o.WithIdentity(key));
+        q.AddTrigger(o => o
+            .ForJob(key)
+            .WithIdentity($"{nameof(JobOrdersIn)}Trigger")
+            .WithCronSchedule(cron.JobOrdersIn));
+    }
 
-	if (jobs.JobDesadvOut)
-	{
-		var jobKey = new JobKey(nameof(JobDesadvOut));
-		q.AddJob<JobDesadvOut>(opts => opts.WithIdentity(jobKey));
-		q.AddTrigger(opts => opts
-			.ForJob(jobKey)
-			.WithIdentity($"{nameof(JobDesadvOut)}Trigger")
-			.WithCronSchedule(cron.JobDesadvOut));
-	}
+    if (jobs.JobDesadvOut)
+    {
+        var key = new JobKey(nameof(JobDesadvOut));
+        q.AddJob<JobDesadvOut>(o => o.WithIdentity(key));
+        q.AddTrigger(o => o
+            .ForJob(key)
+            .WithIdentity($"{nameof(JobDesadvOut)}Trigger")
+            .WithCronSchedule(cron.JobDesadvOut));
+    }
 
-	if (jobs.JobInvoicesOut)
-	{
-		var jobKey = new JobKey(nameof(JobInvoicesOut));
-		q.AddJob<JobInvoicesOut>(opts => opts.WithIdentity(jobKey));
-		q.AddTrigger(opts => opts
-			.ForJob(jobKey)
-			.WithIdentity($"{nameof(JobInvoicesOut)}Trigger")
-			.WithCronSchedule(cron.JobInvoicesOut));
-	}
+    if (jobs.JobInvoicesOut)
+    {
+        var key = new JobKey(nameof(JobInvoicesOut));
+        q.AddJob<JobInvoicesOut>(o => o.WithIdentity(key));
+        q.AddTrigger(o => o
+            .ForJob(key)
+            .WithIdentity($"{nameof(JobInvoicesOut)}Trigger")
+            .WithCronSchedule(cron.JobInvoicesOut));
+    }
 
+    // ── Paso 1: EDI → CSV ─────────────────────────────────────────────────────
+    if (jobs.JobOrdersEdiToCsv)
+    {
+        var key = new JobKey(nameof(JobOrdersEdiToCsv));
+        q.AddJob<JobOrdersEdiToCsv>(o => o.WithIdentity(key));
+        q.AddTrigger(o => o
+            .ForJob(key)
+            .WithIdentity($"{nameof(JobOrdersEdiToCsv)}Trigger")
+            .WithCronSchedule(cron.JobOrdersEdiToCsv));
+    }
 
-	//TEST FTP - Se comenta luego:
-	//
-	/*
-	q.AddJob<JobFtpTest>(opts => opts.WithIdentity("JobFtpTest"));
-	q.AddTrigger(opts => opts
-		.ForJob("JobFtpTest")
-		.WithIdentity("JobFtpTest-trigger")
-		.WithCronSchedule("0/30 * * ? * *")); // cada 30 segundos para probar
-	*/
-	//
-
-
+    // ── Paso 2: CSV → SAP ─────────────────────────────────────────────────────
+    if (jobs.JobOrdersCsvToSap)
+    {
+        var key = new JobKey(nameof(JobOrdersCsvToSap));
+        q.AddJob<JobOrdersCsvToSap>(o => o.WithIdentity(key));
+        q.AddTrigger(o => o
+            .ForJob(key)
+            .WithIdentity($"{nameof(JobOrdersCsvToSap)}Trigger")
+            .WithCronSchedule(cron.JobOrdersCsvToSap));
+    }
 });
 
 builder.Services.AddQuartzHostedService(opt => opt.WaitForJobsToComplete = true);
 
 var app = builder.Build();
 
-Log.Information("=== EDI_Conector_FC iniciado (NET8 Host) ===");
-Log.Information("ContentRoot={Root}", builder.Environment.ContentRootPath);
+Log.Information("=== EDI_Conector_FC iniciado ===");
 Log.Information("BaseDir={Base}", AppContext.BaseDirectory);
 
 await app.RunAsync();
