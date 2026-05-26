@@ -16,8 +16,8 @@
   "Paths": {
     "OrdersInbox": "C:\\Proyectos SAP Business One\\Bellavista_Progrmas\\EDI_Conector_FC\\EDI_Conector_FC\\Clients\\Boozt\\TEST",
     "OrdersCsv": "C:\\Proyectos SAP Business One\\Bellavista_Progrmas\\EDI_Conector_FC\\EDI_Conector_FC\\Clients\\Boozt\\TEST",
-    "OrdersProcessed": "C:\\EDI_Conector_FC\\Boozt\\Orders\\Processed",
-    "OrdersError": "C:\\EDI_Conector_FC\\Boozt\\Orders\\Error"
+    "OrdersProcessed": "C:\\Proyectos SAP Business One\\Bellavista_Progrmas\\EDI_Conector_FC\\EDI_Conector_FC\\Clients\\Boozt\\TEST\\Processed",
+    "OrdersError": "C:\\Proyectos SAP Business One\\Bellavista_Progrmas\\EDI_Conector_FC\\EDI_Conector_FC\\Clients\\Boozt\\TEST\\Error"
   },
 
   "SapDefaults": {

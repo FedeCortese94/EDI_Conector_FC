@@ -18,6 +18,8 @@ namespace EDI_Conector_FC.Models.ClientConfig
 
     public sealed class ClientFtpOptions
     {
+        /// <summary>Si false, se salta la descarga FTP y se usan los ficheros del Inbox directamente.</summary>
+        public bool Enabled { get; set; } = true;
         public string Host { get; set; } = "";
         public int Port { get; set; } = 21;
         public string User { get; set; } = "";

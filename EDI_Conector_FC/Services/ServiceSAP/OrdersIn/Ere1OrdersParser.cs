@@ -44,7 +44,7 @@ namespace EDI_Conector_FC.Services.OrdersIn
 			{
 				if (raw.StartsWith("ERE1C"))
 				{
-					ediDocNum = SafeSlice(raw, 6, 11).Trim();
+					ediDocNum = SafeSlice(raw, 9, 16).Trim().Split(' ')[0];
 
 					var dates = Regex.Matches(raw, @"202\d{5}")
 									 .Select(m => m.Value)
@@ -74,8 +74,8 @@ namespace EDI_Conector_FC.Services.OrdersIn
 
 					var eanRaw = raw.Substring(13, 13).Trim();
 
-					// Aceptamos 12 o 13 dígitos (a veces viene sin el 0 delante)
-					if ((eanRaw.Length != 12 && eanRaw.Length != 13) || !eanRaw.All(char.IsDigit))
+
+					if (eanRaw.Length < 11 || eanRaw.Length > 13 || !eanRaw.All(char.IsDigit))
 						throw new Exception($"EAN inválido en ERE1L (pos 13..26): '{eanRaw}' Línea: {raw}");
 
 					// Si viene 12, lo dejamos tal cual; si viene 13 con 0 delante, también.
