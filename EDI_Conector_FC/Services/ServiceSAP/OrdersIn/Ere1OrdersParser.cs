@@ -72,7 +72,7 @@ namespace EDI_Conector_FC.Services.OrdersIn
 						throw new Exception($"Línea ERE1L demasiado corta para extraer EAN (pos 13..26): {raw}");
 
 
-					var eanRaw = raw.Substring(13, 13).Trim();
+					var eanRaw = raw.Substring(12, 13).Trim();
 
 
 					if (eanRaw.Length < 11 || eanRaw.Length > 13 || !eanRaw.All(char.IsDigit))

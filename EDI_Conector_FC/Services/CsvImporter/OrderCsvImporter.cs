@@ -49,15 +49,16 @@ namespace EDI_Conector_FC.Services.CsvImporter
                 throw new InvalidOperationException($"CSV '{Path.GetFileName(csvPath)}' sin líneas importables.");
 
             // ── 3. Construir el request para SAP ─────────────────────────
-            var req = new SalesOrderCreateRequest
-            {
-                CardCode   = csvOrder.CardCode,
-                DocDate    = csvOrder.DocDate,
-                DocDueDate = csvOrder.DocDueDate,
-                NumAtCard  = csvOrder.NumAtCard,
-            };
+			var req = new SalesOrderCreateRequest
+			{
+				CardCode = csvOrder.CardCode,
+				DocDate = csvOrder.DocDate,
+				DocDueDate = csvOrder.DocDueDate,
+				NumAtCard = csvOrder.NumAtCard,
+				Comments = csvOrder.Comments,
+			};
 
-            foreach (var ln in csvOrder.Lines)
+			foreach (var ln in csvOrder.Lines)
             {
                 req.DocumentLines.Add(new SalesOrderLine
                 {

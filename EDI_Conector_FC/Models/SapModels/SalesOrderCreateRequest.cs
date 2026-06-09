@@ -1,13 +1,13 @@
 ﻿namespace EDI_Conector_FC.Models.SapModels
 {
+
 	public sealed class SalesOrderCreateRequest
 	{
 		public string CardCode { get; set; } = "";
-		public string DocDate { get; set; } = "";    // yyyy-MM-dd
-		public string DocDueDate { get; set; } = ""; // yyyy-MM-dd
-
-		// referencia cliente (muy útil para evitar duplicados)
-		public string? NumAtCard { get; set; }
+		public string DocDate { get; set; } = "";       // yyyy-MM-dd
+		public string DocDueDate { get; set; } = "";    // yyyy-MM-dd
+		public string? NumAtCard { get; set; }          // referencia EDI
+		public string? Comments { get; set; }           // comentario libre
 
 		public List<SalesOrderLine> DocumentLines { get; set; } = new();
 	}

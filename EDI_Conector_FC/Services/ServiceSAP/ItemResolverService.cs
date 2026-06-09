@@ -64,7 +64,7 @@ namespace EDI_Conector_FC.Services.ServiceSAP
 			var eanEscaped = ean.Replace("'", "''");
 
 			// ✅ Campo correcto en Service Layer
-			var url = $"Items?$select=ItemCode&$filter=BarCode eq '{eanEscaped}'&$top=1";
+			var url = $"Items?$select=ItemCode,BarCode&$filter=contains(BarCode,'{eanEscaped}')&$top=1";
 
 			var response = await _sl.GetAsync<ServiceLayerListResponse<ItemCodeDto>>(url, ct);
 			return response?.Value?.FirstOrDefault()?.ItemCode;
