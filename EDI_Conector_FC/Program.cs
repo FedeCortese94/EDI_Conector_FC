@@ -45,15 +45,16 @@ builder.Services.Configure<OrdersInOptions>(builder.Configuration.GetSection("Or
 builder.Services.AddSingleton<ServiceLoginSL>();
 builder.Services.AddSingleton<ServiceLayerClient>();
 builder.Services.AddSingleton<IItemResolverService, ItemResolverService>();
+builder.Services.AddSingleton<IBooztMetadataService, BooztMetadataService>();
 
 // ── FTP ───────────────────────────────────────────────────────────────────────
-builder.Services.AddSingleton<IFtpService, FtpService>();         // legacy ECI
-builder.Services.AddSingleton<IFtpServiceFactory, FtpServiceFactory>(); // multi-cliente
+builder.Services.AddSingleton<IFtpService, FtpService>();
+builder.Services.AddSingleton<IFtpServiceFactory, FtpServiceFactory>();
 
-// ── Parser (compartido entre legacy y nuevo flujo) ────────────────────────────
+// ── Parser ────────────────────────────────────────────────────────────────────
 builder.Services.AddSingleton<IEre1OrdersParser, Ere1OrdersParser>();
 
-// ── Nuevo flujo: EDI → CSV → SAP ─────────────────────────────────────────────
+// ── Flujo multi-cliente: EDI → CSV → SAP ─────────────────────────────────────
 builder.Services.AddSingleton<IClientConfigLoader, ClientConfigLoader>();
 builder.Services.AddSingleton<IOrderCsvGenerator, OrderCsvGenerator>();
 builder.Services.AddSingleton<IOrderCsvReader, OrderCsvReader>();
@@ -68,57 +69,39 @@ builder.Services.AddQuartz(q =>
     var jobs = builder.Configuration.GetSection("Jobs").Get<JobsOptions>() ?? new JobsOptions();
     var cron = builder.Configuration.GetSection("Quartz").Get<QuartzScheduleOptions>() ?? new QuartzScheduleOptions();
 
-    // ── Job legacy: ECI directo a SAP ────────────────────────────────────────
     if (jobs.JobOrdersIn)
     {
         var key = new JobKey(nameof(JobOrdersIn));
         q.AddJob<JobOrdersIn>(o => o.WithIdentity(key));
-        q.AddTrigger(o => o
-            .ForJob(key)
-            .WithIdentity($"{nameof(JobOrdersIn)}Trigger")
-            .WithCronSchedule(cron.JobOrdersIn));
+        q.AddTrigger(o => o.ForJob(key).WithIdentity($"{nameof(JobOrdersIn)}Trigger").WithCronSchedule(cron.JobOrdersIn));
     }
 
     if (jobs.JobDesadvOut)
     {
         var key = new JobKey(nameof(JobDesadvOut));
         q.AddJob<JobDesadvOut>(o => o.WithIdentity(key));
-        q.AddTrigger(o => o
-            .ForJob(key)
-            .WithIdentity($"{nameof(JobDesadvOut)}Trigger")
-            .WithCronSchedule(cron.JobDesadvOut));
+        q.AddTrigger(o => o.ForJob(key).WithIdentity($"{nameof(JobDesadvOut)}Trigger").WithCronSchedule(cron.JobDesadvOut));
     }
 
     if (jobs.JobInvoicesOut)
     {
         var key = new JobKey(nameof(JobInvoicesOut));
         q.AddJob<JobInvoicesOut>(o => o.WithIdentity(key));
-        q.AddTrigger(o => o
-            .ForJob(key)
-            .WithIdentity($"{nameof(JobInvoicesOut)}Trigger")
-            .WithCronSchedule(cron.JobInvoicesOut));
+        q.AddTrigger(o => o.ForJob(key).WithIdentity($"{nameof(JobInvoicesOut)}Trigger").WithCronSchedule(cron.JobInvoicesOut));
     }
 
-    // ── Paso 1: EDI → CSV ─────────────────────────────────────────────────────
     if (jobs.JobOrdersEdiToCsv)
     {
         var key = new JobKey(nameof(JobOrdersEdiToCsv));
         q.AddJob<JobOrdersEdiToCsv>(o => o.WithIdentity(key));
-        q.AddTrigger(o => o
-            .ForJob(key)
-            .WithIdentity($"{nameof(JobOrdersEdiToCsv)}Trigger")
-            .WithCronSchedule(cron.JobOrdersEdiToCsv));
+        q.AddTrigger(o => o.ForJob(key).WithIdentity($"{nameof(JobOrdersEdiToCsv)}Trigger").WithCronSchedule(cron.JobOrdersEdiToCsv));
     }
 
-    // ── Paso 2: CSV → SAP ─────────────────────────────────────────────────────
     if (jobs.JobOrdersCsvToSap)
     {
         var key = new JobKey(nameof(JobOrdersCsvToSap));
         q.AddJob<JobOrdersCsvToSap>(o => o.WithIdentity(key));
-        q.AddTrigger(o => o
-            .ForJob(key)
-            .WithIdentity($"{nameof(JobOrdersCsvToSap)}Trigger")
-            .WithCronSchedule(cron.JobOrdersCsvToSap));
+        q.AddTrigger(o => o.ForJob(key).WithIdentity($"{nameof(JobOrdersCsvToSap)}Trigger").WithCronSchedule(cron.JobOrdersCsvToSap));
     }
 });
 
