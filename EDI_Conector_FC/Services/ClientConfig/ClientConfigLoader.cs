@@ -1,4 +1,5 @@
 using EDI_Conector_FC.Models.ClientConfig;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
 
@@ -18,9 +19,10 @@ namespace EDI_Conector_FC.Services.ClientConfig
         private readonly ILogger<ClientConfigLoader> _logger;
 
         // Carpeta base donde viven los ficheros de configuración de cada cliente.
-        // Estructura: Clients/{ClientId}/config.json
-        private static readonly string ClientsBasePath =
-            Path.Combine(AppContext.BaseDirectory, "Clients");
+        // Estructura: {ClientsPath}/{ClientId}/config.json
+        // Configurable via "ClientsPath" en appsettings.json; si no se informa,
+        // se usa AppContext.BaseDirectory/Clients por compatibilidad.
+        private readonly string _clientsBasePath;
 
         private static readonly JsonSerializerOptions JsonOpts = new()
         {
@@ -29,14 +31,19 @@ namespace EDI_Conector_FC.Services.ClientConfig
             AllowTrailingCommas = true,
         };
 
-        public ClientConfigLoader(ILogger<ClientConfigLoader> logger)
+        public ClientConfigLoader(ILogger<ClientConfigLoader> logger, IConfiguration configuration)
         {
             _logger = logger;
+
+            var configuredPath = configuration["ClientsPath"];
+            _clientsBasePath = string.IsNullOrWhiteSpace(configuredPath)
+                ? Path.Combine(AppContext.BaseDirectory, "Clients")
+                : configuredPath;
         }
 
         public ClientOptions Load(string clientId)
         {
-            var path = Path.Combine(ClientsBasePath, clientId, "config.json");
+            var path = Path.Combine(_clientsBasePath, clientId, "config.json");
 
             if (!File.Exists(path))
                 throw new FileNotFoundException(
@@ -54,15 +61,15 @@ namespace EDI_Conector_FC.Services.ClientConfig
 
         public IReadOnlyList<ClientOptions> LoadAllEnabled()
         {
-            if (!Directory.Exists(ClientsBasePath))
+            if (!Directory.Exists(_clientsBasePath))
             {
-                _logger.LogWarning("Carpeta de clientes no encontrada: {Path}", ClientsBasePath);
+                _logger.LogWarning("Carpeta de clientes no encontrada: {Path}", _clientsBasePath);
                 return Array.Empty<ClientOptions>();
             }
 
             var result = new List<ClientOptions>();
 
-            foreach (var dir in Directory.EnumerateDirectories(ClientsBasePath))
+            foreach (var dir in Directory.EnumerateDirectories(_clientsBasePath))
             {
                 var clientId = Path.GetFileName(dir);
                 try

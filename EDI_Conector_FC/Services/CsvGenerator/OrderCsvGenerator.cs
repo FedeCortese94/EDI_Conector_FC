@@ -10,49 +10,34 @@ namespace EDI_Conector_FC.Services.CsvGenerator
 {
 	public interface IOrderCsvGenerator
 	{
-		Task<string> GenerateAsync(
-			EdiOrder ediOrder,
-			ClientOptions clientOpts,
-			CancellationToken ct);
+		Task<string> GenerateAsync(EdiOrder ediOrder, ClientOptions clientOpts, CancellationToken ct);
 	}
 
 	public sealed class OrderCsvGenerator : IOrderCsvGenerator
 	{
 		private readonly IItemResolverService _itemResolver;
+		private readonly IBooztMetadataService _metadata;
 		private readonly ILogger<OrderCsvGenerator> _logger;
-
 		private const char Tab = '\t';
 
 		public OrderCsvGenerator(
 			IItemResolverService itemResolver,
+			IBooztMetadataService metadata,
 			ILogger<OrderCsvGenerator> logger)
 		{
 			_itemResolver = itemResolver;
+			_metadata = metadata;
 			_logger = logger;
 		}
 
-		public async Task<string> GenerateAsync(
-			EdiOrder ediOrder,
-			ClientOptions clientOpts,
-			CancellationToken ct)
+		public async Task<string> GenerateAsync(EdiOrder ediOrder, ClientOptions clientOpts, CancellationToken ct)
 		{
 			var sap = clientOpts.SapDefaults;
 			var paths = clientOpts.Paths;
 
-			// ── 1. Construir modelo CSV ───────────────────────────────────
-			var csvOrder = new CsvOrder
-			{
-				CardCode = sap.CardCode,
-				DocDate = ediOrder.DocDate.ToString("dd/MM/yyyy"),
-				DocDueDate = ediOrder.DocDueDate.ToString("dd/MM/yyyy"),
-				NumAtCard = ediOrder.EdiDocNum,
-				Currency = sap.Currency,
-				WarehouseCode = sap.WarehouseCode,
-				Comments = $"{sap.CommentsPrefix} {ediOrder.EdiDocNum}".Trim(),
-			};
-
-			// ── 2. Resolver EANs → ItemCodes ─────────────────────────────
+			// ── 1. Resolver EANs → ItemCodes ─────────────────────────────
 			int resolved = 0, notFound = 0;
+			var csvLines = new List<CsvOrderLine>();
 
 			foreach (var ln in ediOrder.Lines)
 			{
@@ -64,12 +49,10 @@ namespace EDI_Conector_FC.Services.CsvGenerator
 				if (string.IsNullOrWhiteSpace(itemCode))
 				{
 					_logger.LogWarning(
-						"EAN sin ItemCode en SAP. Cliente={ClientId} EdiDoc={EdiDoc} Línea={LineNo} EAN={Ean}",
+						"EAN sin ItemCode. Cliente={ClientId} EdiDoc={Doc} Línea={N} EAN={Ean}",
 						clientOpts.ClientId, ediOrder.EdiDocNum, ln.LineNo, ean);
-
 					notFound++;
-
-					csvOrder.Lines.Add(new CsvOrderLine
+					csvLines.Add(new CsvOrderLine
 					{
 						ItemCode = $"[NOT_FOUND:{ean}]",
 						Quantity = ln.Quantity,
@@ -80,7 +63,7 @@ namespace EDI_Conector_FC.Services.CsvGenerator
 					continue;
 				}
 
-				csvOrder.Lines.Add(new CsvOrderLine
+				csvLines.Add(new CsvOrderLine
 				{
 					ItemCode = itemCode,
 					Quantity = ln.Quantity,
@@ -88,47 +71,72 @@ namespace EDI_Conector_FC.Services.CsvGenerator
 					WarehouseCode = sap.WarehouseCode,
 					Ean = ean,
 				});
-
 				resolved++;
 			}
 
 			_logger.LogInformation(
-				"CSV Generator: EdiDoc={EdiDoc} Líneas={Total} Resueltas={Ok} NoEncontradas={Nf}",
+				"CSV Generator: EdiDoc={Doc} Líneas={Total} Resueltas={Ok} NoEncontradas={Nf}",
 				ediOrder.EdiDocNum, ediOrder.Lines.Count, resolved, notFound);
 
-			// ── 3. Escribir fichero CSV ───────────────────────────────────
-			Directory.CreateDirectory(paths.OrdersCsv);
+			// ── 2. Resolver metadatos ─────────────────────────────────────
+			var tipoPedido = ediOrder.TipoDoc == "224" ? "R" : "I";
 
+			var itemCodes = csvLines
+				.Where(l => !l.ItemCode.StartsWith("[NOT_FOUND:"))
+				.Select(l => l.ItemCode).ToList();
+
+			var temporada = await _metadata.GetTemporadaAsync(ediOrder.TipoDoc, itemCodes, ct);
+			var (marcaCodigo, marcaNumero) = itemCodes.Count > 0
+				? await _metadata.GetMarcaAsync(itemCodes[0], ct)
+				: (null, null);
+
+			_logger.LogInformation(
+				"Metadatos: TipoPedido={Tipo} Temporada={Temp} Marca={Marca}({Num}) GLN_DP={Gln}",
+				tipoPedido, temporada ?? "null", marcaCodigo ?? "null",
+				marcaNumero ?? "null", ediOrder.GlnPuntoEntrega ?? "null");
+
+			// ── 3. Construir CsvOrder ─────────────────────────────────────
+			var csvOrder = new CsvOrder
+			{
+				CardCode = sap.CardCode,
+				DocDate = ediOrder.DocDate.ToString("dd/MM/yyyy"),
+				DocDueDate = ediOrder.DocDueDate.ToString("dd/MM/yyyy"),
+				NumAtCard = ediOrder.EdiDocNum,
+				Currency = sap.Currency,
+				WarehouseCode = sap.WarehouseCode,
+				Comments = $"{sap.CommentsPrefix} {ediOrder.EdiDocNum}".Trim(),
+				Temporada = temporada,
+				MarcaCodigo = marcaCodigo,
+				MarcaNumero = marcaNumero,
+				TipoPedido = tipoPedido,
+				GlnPuntoEntrega = ediOrder.GlnPuntoEntrega,
+				Lines = csvLines,
+			};
+
+			// ── 4. Escribir CSV ───────────────────────────────────────────
+			Directory.CreateDirectory(paths.OrdersCsv);
 			var stamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
 			var fileName = $"{clientOpts.ClientId}_{ediOrder.EdiDocNum}_{stamp}.csv";
 			var filePath = Path.Combine(paths.OrdersCsv, fileName);
-
 			await WriteCsvAsync(filePath, csvOrder);
-
 			_logger.LogInformation("CSV generado: {FilePath}", filePath);
-
 			return filePath;
 		}
-
-		// ─────────────────────────────────────────────────────────────────
-		// Escritura
-		// ─────────────────────────────────────────────────────────────────
 
 		private static async Task WriteCsvAsync(string path, CsvOrder order)
 		{
 			var sb = new StringBuilder();
 
-			// Línea de cabecera del pedido
+			// Cabecera: ...| TipoPedido | Temporada | MarcaCodigo | MarcaNumero | GlnPuntoEntrega
 			sb.AppendLine(string.Join(Tab,
-				order.CardCode,
-				order.DocDate,
-				order.DocDueDate,
-				order.NumAtCard,
-				order.Currency,
-				order.WarehouseCode,
-				order.Comments));
+				order.CardCode, order.DocDate, order.DocDueDate, order.NumAtCard,
+				order.Currency, order.WarehouseCode, order.Comments,
+				order.TipoPedido ?? "",
+				order.Temporada ?? "",
+				order.MarcaCodigo ?? "",
+				order.MarcaNumero ?? "",
+				order.GlnPuntoEntrega ?? ""));
 
-			// Líneas de detalle
 			foreach (var ln in order.Lines)
 			{
 				sb.AppendLine(string.Join(Tab,
@@ -142,15 +150,9 @@ namespace EDI_Conector_FC.Services.CsvGenerator
 			await File.WriteAllTextAsync(path, sb.ToString(), Encoding.UTF8);
 		}
 
-		// ─────────────────────────────────────────────────────────────────
-		// Helpers
-		// ─────────────────────────────────────────────────────────────────
-
 		private static string PadEan(string ean, int targetLength)
 		{
-			if (targetLength <= 0 || ean.Length >= targetLength)
-				return ean;
-
+			if (targetLength <= 0 || ean.Length >= targetLength) return ean;
 			return ean.PadLeft(targetLength, '0');
 		}
 	}

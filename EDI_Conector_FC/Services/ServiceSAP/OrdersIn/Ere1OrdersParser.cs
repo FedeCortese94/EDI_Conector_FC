@@ -1,15 +1,16 @@
 ﻿using System.Globalization;
-using System.Linq;
 using System.Text.RegularExpressions;
 
 namespace EDI_Conector_FC.Services.OrdersIn
 {
 	public sealed record EdiOrder(
 		string EdiDocNum,
+		string TipoDoc,             // "220" = Inicial, "224" = Repetición
 		DateOnly DocDate,
 		DateOnly DocDueDate,
 		string? Season,
 		string? EciDept,
+		string? GlnPuntoEntrega,    // ERE1P DP — punto de entrega del cliente
 		List<EdiOrderLine> Lines
 	);
 
@@ -32,10 +33,12 @@ namespace EDI_Conector_FC.Services.OrdersIn
 			var lines = File.ReadAllLines(filePath);
 
 			string? ediDocNum = null;
+			string tipoDoc = "220";
 			DateOnly? docDate = null;
 			DateOnly? docDueDate = null;
 			string? season = null;
 			string? eciDept = null;
+			string? glnPuntoEntrega = null;
 
 			var orderLines = new List<EdiOrderLine>();
 			int lineNo = 0;
@@ -44,11 +47,11 @@ namespace EDI_Conector_FC.Services.OrdersIn
 			{
 				if (raw.StartsWith("ERE1C"))
 				{
+					tipoDoc = SafeSlice(raw, 6, 3).Trim();
 					ediDocNum = SafeSlice(raw, 9, 16).Trim().Split(' ')[0];
 
 					var dates = Regex.Matches(raw, @"202\d{5}")
-									 .Select(m => m.Value)
-									 .ToList();
+									 .Select(m => m.Value).ToList();
 
 					if (dates.Count >= 1) docDate = ParseDate(dates[0]);
 					if (dates.Count >= 2) docDueDate = ParseDate(dates[1]);
@@ -64,31 +67,30 @@ namespace EDI_Conector_FC.Services.OrdersIn
 						if (sMatch.Success) season = sMatch.Groups[1].Value;
 					}
 				}
+				else if (raw.StartsWith("ERE1P DP"))
+				{
+					// GLN punto de entrega: posición 9, longitud 13
+					// "ERE1P DP 7300009042869    9  ..."
+					var gln = SafeSlice(raw, 9, 13).Trim();
+					if (!string.IsNullOrWhiteSpace(gln))
+						glnPuntoEntrega = gln;
+				}
 				else if (raw.StartsWith("ERE1L"))
 				{
-					// ✅ EAN bueno: posición 13..26 (13 chars), contando desde 0
-					// Ejemplo: "0198410202067"
 					if (raw.Length < 27)
-						throw new Exception($"Línea ERE1L demasiado corta para extraer EAN (pos 13..26): {raw}");
-
+						throw new Exception($"Línea ERE1L demasiado corta: {raw}");
 
 					var eanRaw = raw.Substring(12, 13).Trim();
 
-
 					if (eanRaw.Length < 11 || eanRaw.Length > 13 || !eanRaw.All(char.IsDigit))
-						throw new Exception($"EAN inválido en ERE1L (pos 13..26): '{eanRaw}' Línea: {raw}");
+						throw new Exception($"EAN inválido en ERE1L: '{eanRaw}' Línea: {raw}");
 
-					// Si viene 12, lo dejamos tal cual; si viene 13 con 0 delante, también.
-					var ean = eanRaw;
-
-
-					// Cantidades (se mantienen como estaban)
-					var qty1 = ParseDecimalFixed(raw, 328, 17); // "000000000002.000"
-					var qty2 = ParseDecimalFixed(raw, 366, 17); // "000000000001.000" (si existe)
+					var qty1 = ParseDecimalFixed(raw, 328, 17);
+					var qty2 = ParseDecimalFixed(raw, 366, 17);
 
 					orderLines.Add(new EdiOrderLine(
 						LineNo: lineNo++,
-						Ean: ean,
+						Ean: eanRaw,
 						Quantity: qty1,
 						QtyAlt: qty2
 					));
@@ -100,10 +102,12 @@ namespace EDI_Conector_FC.Services.OrdersIn
 
 			return new EdiOrder(
 				EdiDocNum: ediDocNum,
+				TipoDoc: tipoDoc,
 				DocDate: docDate.Value,
 				DocDueDate: docDueDate.Value,
 				Season: season,
 				EciDept: eciDept,
+				GlnPuntoEntrega: glnPuntoEntrega,
 				Lines: orderLines
 			);
 		}
