@@ -51,54 +51,43 @@ namespace EDI_Conector_FC.Services.ServiceSAP.Http
 			return new RestClient(httpClient);
 		}
 
+		private string BuildCookie()
+			=> string.IsNullOrWhiteSpace(_routeId)
+				? $"B1SESSION={_sessionId}"
+				: $"B1SESSION={_sessionId}; ROUTEID={_routeId}";
+
+		// ── GET ───────────────────────────────────────────────────────────
+
 		public async Task<T?> GetAsync<T>(string relativeUrl, CancellationToken ct = default)
 		{
 			var raw = await GetRawAsync(relativeUrl);
-
-			if (string.IsNullOrWhiteSpace(raw))
-				return default;
-
+			if (string.IsNullOrWhiteSpace(raw)) return default;
 			return JsonSerializer.Deserialize<T>(raw, new JsonSerializerOptions
 			{
 				PropertyNameCaseInsensitive = true
 			});
 		}
 
-
 		public async Task<string> GetRawAsync(string relativeUrl)
 		{
 			await EnsureSessionAsync();
-
 			var client = BuildClient($"{_opt.Server}/b1s/v1/");
 
 			var req = new RestRequest(relativeUrl, Method.Get);
 			req.AddHeader("Accept", "application/json");
-
-			var cookie = string.IsNullOrWhiteSpace(_routeId)
-				? $"B1SESSION={_sessionId}"
-				: $"B1SESSION={_sessionId}; ROUTEID={_routeId}";
-
-			req.AddHeader("Cookie", cookie);
+			req.AddHeader("Cookie", BuildCookie());
 
 			var resp = await client.ExecuteAsync(req);
 
-			// Si la sesión caduca, reloguea y reintenta 1 vez
 			if ((int)resp.StatusCode == 401)
 			{
 				_logger.LogWarning("Sesión SL caducada (401). Re-login...");
-				_sessionId = null;
-				_routeId = null;
-
+				_sessionId = null; _routeId = null;
 				await EnsureSessionAsync();
-
-				cookie = string.IsNullOrWhiteSpace(_routeId)
-					? $"B1SESSION={_sessionId}"
-					: $"B1SESSION={_sessionId}; ROUTEID={_routeId}";
 
 				req = new RestRequest(relativeUrl, Method.Get);
 				req.AddHeader("Accept", "application/json");
-				req.AddHeader("Cookie", cookie);
-
+				req.AddHeader("Cookie", BuildCookie());
 				resp = await client.ExecuteAsync(req);
 			}
 
@@ -108,54 +97,38 @@ namespace EDI_Conector_FC.Services.ServiceSAP.Http
 			return resp.Content ?? "";
 		}
 
+		// ── POST ──────────────────────────────────────────────────────────
+
 		public async Task<TResponse?> PostAsync<TRequest, TResponse>(string relativeUrl, TRequest body)
 		{
 			await EnsureSessionAsync();
-
 			var client = BuildClient($"{_opt.Server}/b1s/v1/");
-
-			var req = new RestRequest(relativeUrl, Method.Post);
-			req.AddHeader("Accept", "application/json");
-			req.AddHeader("Content-Type", "application/json");
-
-			var cookie = string.IsNullOrWhiteSpace(_routeId)
-				? $"B1SESSION={_sessionId}"
-				: $"B1SESSION={_sessionId}; ROUTEID={_routeId}";
-
-			req.AddHeader("Cookie", cookie);
-
 			var json = JsonSerializer.Serialize(body);
-			req.AddStringBody(json, DataFormat.Json);
 
-			var resp = await client.ExecuteAsync(req);
+			RestRequest BuildReq()
+			{
+				var r = new RestRequest(relativeUrl, Method.Post);
+				r.AddHeader("Accept", "application/json");
+				r.AddHeader("Content-Type", "application/json");
+				r.AddHeader("Cookie", BuildCookie());
+				r.AddStringBody(json, DataFormat.Json);
+				return r;
+			}
 
-			// re-login si 401
+			var resp = await client.ExecuteAsync(BuildReq());
+
 			if ((int)resp.StatusCode == 401)
 			{
 				_logger.LogWarning("Sesión SL caducada (401) en POST. Re-login...");
-				_sessionId = null;
-				_routeId = null;
-
+				_sessionId = null; _routeId = null;
 				await EnsureSessionAsync();
-
-				cookie = string.IsNullOrWhiteSpace(_routeId)
-					? $"B1SESSION={_sessionId}"
-					: $"B1SESSION={_sessionId}; ROUTEID={_routeId}";
-
-				req = new RestRequest(relativeUrl, Method.Post);
-				req.AddHeader("Accept", "application/json");
-				req.AddHeader("Content-Type", "application/json");
-				req.AddHeader("Cookie", cookie);
-				req.AddStringBody(json, DataFormat.Json);
-
-				resp = await client.ExecuteAsync(req);
+				resp = await client.ExecuteAsync(BuildReq());
 			}
 
 			if (!resp.IsSuccessful)
 				throw new Exception($"POST SL falló: {(int)resp.StatusCode} {resp.StatusDescription} - {resp.Content}");
 
-			if (string.IsNullOrWhiteSpace(resp.Content))
-				return default;
+			if (string.IsNullOrWhiteSpace(resp.Content)) return default;
 
 			return JsonSerializer.Deserialize<TResponse>(resp.Content, new JsonSerializerOptions
 			{
@@ -163,7 +136,38 @@ namespace EDI_Conector_FC.Services.ServiceSAP.Http
 			});
 		}
 
+		// ── PATCH ─────────────────────────────────────────────────────────
 
+		public async Task PatchAsync<TRequest>(string relativeUrl, TRequest body)
+		{
+			await EnsureSessionAsync();
+			var client = BuildClient($"{_opt.Server}/b1s/v1/");
+			var json = JsonSerializer.Serialize(body);
 
+			RestRequest BuildReq()
+			{
+				var r = new RestRequest(relativeUrl, Method.Patch);
+				r.AddHeader("Accept", "application/json");
+				r.AddHeader("Content-Type", "application/json");
+				r.AddHeader("Cookie", BuildCookie());
+				r.AddStringBody(json, DataFormat.Json);
+				return r;
+			}
+
+			var resp = await client.ExecuteAsync(BuildReq());
+
+			if ((int)resp.StatusCode == 401)
+			{
+				_logger.LogWarning("Sesión SL caducada (401) en PATCH. Re-login...");
+				_sessionId = null; _routeId = null;
+				await EnsureSessionAsync();
+				resp = await client.ExecuteAsync(BuildReq());
+			}
+
+			if (!resp.IsSuccessful)
+				throw new Exception($"PATCH SL falló: {(int)resp.StatusCode} {resp.StatusDescription} - {resp.Content}");
+
+			_logger.LogDebug("PATCH OK: {Url}", relativeUrl);
+		}
 	}
 }

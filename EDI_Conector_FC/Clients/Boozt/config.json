@@ -17,16 +17,40 @@
     "OrdersInbox": "C:\\Proyectos SAP Business One\\Bellavista_Progrmas\\EDI_Conector_FC\\EDI_Conector_FC\\Clients\\Boozt\\TEST",
     "OrdersCsv": "C:\\Proyectos SAP Business One\\Bellavista_Progrmas\\EDI_Conector_FC\\EDI_Conector_FC\\Clients\\Boozt\\TEST",
     "OrdersProcessed": "C:\\Proyectos SAP Business One\\Bellavista_Progrmas\\EDI_Conector_FC\\EDI_Conector_FC\\Clients\\Boozt\\TEST\\Processed",
-    "OrdersError": "C:\\Proyectos SAP Business One\\Bellavista_Progrmas\\EDI_Conector_FC\\EDI_Conector_FC\\Clients\\Boozt\\TEST\\Error"
+    "OrdersError": "C:\\Proyectos SAP Business One\\Bellavista_Progrmas\\EDI_Conector_FC\\EDI_Conector_FC\\Clients\\Boozt\\TEST\\Error",
+
+    "DesadvOutbox": "C:\\Proyectos SAP Business One\\Bellavista_Progrmas\\EDI_Conector_FC\\EDI_Conector_FC\\Clients\\Boozt\\DESADV\\Outbox",
+    "DesadvProcessed": "C:\\Proyectos SAP Business One\\Bellavista_Progrmas\\EDI_Conector_FC\\EDI_Conector_FC\\Clients\\Boozt\\DESADV\\Processed",
+    "DesadvError": "C:\\Proyectos SAP Business One\\Bellavista_Progrmas\\EDI_Conector_FC\\EDI_Conector_FC\\Clients\\Boozt\\DESADV\\Error",
+
+    "InvoicOutbox": "C:\\Proyectos SAP Business One\\Bellavista_Progrmas\\EDI_Conector_FC\\EDI_Conector_FC\\Clients\\Boozt\\INVOIC\\Outbox",
+    "InvoicProcessed": "C:\\Proyectos SAP Business One\\Bellavista_Progrmas\\EDI_Conector_FC\\EDI_Conector_FC\\Clients\\Boozt\\INVOIC\\Processed",
+    "InvoicError": "C:\\Proyectos SAP Business One\\Bellavista_Progrmas\\EDI_Conector_FC\\EDI_Conector_FC\\Clients\\Boozt\\INVOIC\\Error"
   },
 
-	"SapDefaults": {
-		"CardCode":       "C08543",
-		"WarehouseCode":  "12",
-		"CommentsPrefix": "EDI Boozt"
-	},
-	
-	"Parser": {
-		"EanPadToLength": 0
-	}
+  "SapDefaults": {
+    "CardCode": "C08543",
+    "WarehouseCode": "12",
+    "CommentsPrefix": "EDI Boozt"
+  },
+
+  "Parser": {
+    "EanPadToLength": 0
+  },
+
+  "Desadv": {
+    "Enabled": true,
+    "GlnRemitente": "8435720700008",
+    "FtpFolderDesadv": "/transactions/desadv/in",
+    "MarcarComoEnviado": true
+  },
+
+  "Invoic": {
+    "Enabled": true,
+    "GlnRemitente": "8435720700008",
+    "GlnDestinatarioFallback": "",
+    "FtpFolderInvoic": "/transactions/invoic/in",
+    "MarcarComoEnviada": true,
+    "VatIdComprador": "SE556710469901"
+  }
 }

@@ -3,180 +3,151 @@ using Microsoft.Extensions.Logging;
 
 namespace EDI_Conector_FC.Services.ServiceSAP
 {
-    /// <summary>
-    /// Resuelve los metadatos necesarios para los campos de usuario del pedido Boozt:
-    /// - Temporada (U_INTRX_PR_TEMPORADA / U_SEITemp)
-    /// - Marca     (U_INTX_PR_MARCA / U_SEIMarca)
-    /// </summary>
-    public interface IBooztMetadataService
-    {
-        Task<string?> GetTemporadaAsync(string tipoDoc, List<string> itemCodes, CancellationToken ct);
-        Task<(string? MarcaCodigo, string? MarcaNumero)> GetMarcaAsync(string firstItemCode, CancellationToken ct);
-    }
+	public interface IBooztMetadataService
+	{
+		Task<string?> GetTemporadaAsync(string tipoDoc, List<string> itemCodes, CancellationToken ct);
+		Task<(string? MarcaCodigo, string? MarcaNumero)> GetMarcaAsync(string firstItemCode, CancellationToken ct);
+	}
 
-    public sealed class BooztMetadataService : IBooztMetadataService
-    {
-        private readonly ServiceLayerClient _sl;
-        private readonly ILogger<BooztMetadataService> _logger;
+	public sealed class BooztMetadataService : IBooztMetadataService
+	{
+		private readonly ServiceLayerClient _sl;
+		private readonly ILogger<BooztMetadataService> _logger;
 
-        // Mapeo marca código → número para U_SEIMarca
-        private static readonly Dictionary<string, string> MarcaMap = new(StringComparer.OrdinalIgnoreCase)
-        {
-            { "DD", "8" },
-            { "IJ", "17" },
-            { "AB", "1" },
-        };
+		private static readonly Dictionary<string, string> MarcaMap = new(StringComparer.OrdinalIgnoreCase)
+		{
+			{ "DD", "8"  },
+			{ "IJ", "17" },
+			{ "AB", "1"  },
+		};
 
-        public BooztMetadataService(ServiceLayerClient sl, ILogger<BooztMetadataService> logger)
-        {
-            _sl = sl;
-            _logger = logger;
-        }
+		public BooztMetadataService(ServiceLayerClient sl, ILogger<BooztMetadataService> logger)
+		{
+			_sl = sl;
+			_logger = logger;
+		}
 
-        // ─────────────────────────────────────────────────────────────────
-        // TEMPORADA
-        // ─────────────────────────────────────────────────────────────────
+		// ── TEMPORADA ─────────────────────────────────────────────────────
 
-        public async Task<string?> GetTemporadaAsync(string tipoDoc, List<string> itemCodes, CancellationToken ct)
-        {
-            bool esRepeticion = tipoDoc == "224";
+		public async Task<string?> GetTemporadaAsync(string tipoDoc, List<string> itemCodes, CancellationToken ct)
+		{
+			bool esRepeticion = tipoDoc == "224";
 
-            if (esRepeticion)
-            {
-                // 1) Intentar obtener del primer artículo que tenga temporada
-                foreach (var itemCode in itemCodes)
-                {
-                    var tempArticulo = await GetTemporadaFromItemAsync(itemCode, ct);
-                    if (!string.IsNullOrWhiteSpace(tempArticulo))
-                    {
-                        _logger.LogInformation(
-                            "Temporada REPO del artículo {ItemCode}: {Temp}", itemCode, tempArticulo);
-                        return tempArticulo;
-                    }
-                }
+			if (esRepeticion)
+			{
+				foreach (var itemCode in itemCodes)
+				{
+					var temp = await GetTemporadaFromItemAsync(itemCode, ct);
+					if (!string.IsNullOrWhiteSpace(temp))
+					{
+						_logger.LogInformation("Temporada REPO del artículo {ItemCode}: {Temp}", itemCode, temp);
+						return temp;
+					}
+				}
+				_logger.LogInformation("Temporada REPO: ningún artículo tiene temporada, consultando tabla maestra...");
+				return await GetTemporadaFromMaestroAsync(12, ct);
+			}
+			else
+			{
+				return await GetTemporadaFromMaestroAsync(11, ct);
+			}
+		}
 
-                // 2) Fallback tabla maestra U_Bouti = '12'
-                _logger.LogInformation("Temporada REPO: ningún artículo tiene temporada, consultando tabla maestra...");
-                return await GetTemporadaFromMaestroAsync("12", ct);
-            }
-            else
-            {
-                // Inicial: tabla maestra U_Bouti = '11'
-                return await GetTemporadaFromMaestroAsync("11", ct);
-            }
-        }
+		private async Task<string?> GetTemporadaFromItemAsync(string itemCode, CancellationToken ct)
+		{
+			// Intentar cada campo por separado — si el campo no existe en SAP, devuelve null sin error
+			var temp = await TryGetItemFieldAsync(itemCode, "U_INTRX_PR_Temporada", ct);
+			if (!string.IsNullOrWhiteSpace(temp)) return temp;
 
-        private async Task<string?> GetTemporadaFromItemAsync(string itemCode, CancellationToken ct)
-        {
-            try
-            {
-                var escaped = itemCode.Replace("'", "''");
-                var url = $"Items('{escaped}')?$select=U_INTRX_PR_Temporada,U_SeiTemp";
-                var result = await _sl.GetAsync<ItemTemporadaDto>(url, ct);
+			temp = await TryGetItemFieldAsync(itemCode, "U_SEITemp", ct);
+			if (!string.IsNullOrWhiteSpace(temp)) return temp;
 
-                if (result == null) return null;
+			return null;
+		}
 
-                if (!string.IsNullOrWhiteSpace(result.U_INTRX_PR_Temporada))
-                    return result.U_INTRX_PR_Temporada.Trim();
+		private async Task<string?> GetTemporadaFromMaestroAsync(int bouti, CancellationToken ct)
+		{
+			try
+			{
+				var url = $"INTRX_FM_TEMPOESHOP?$select=U_Temporada&$filter=U_Bouti eq {bouti}&$orderby=U_Temporada desc&$top=1";
+				var result = await _sl.GetAsync<SlListResponse<TemporadaMaestroDto>>(url, ct);
+				var temp = result?.Value?.FirstOrDefault()?.U_Temporada?.Trim();
+				_logger.LogInformation("Temporada tabla maestra (U_Bouti={Bouti}): {Temp}", bouti, temp ?? "null");
+				return temp;
+			}
+			catch (Exception ex)
+			{
+				_logger.LogWarning(ex, "Error consultando tabla maestra temporada (U_Bouti={Bouti})", bouti);
+				return null;
+			}
+		}
 
-                if (!string.IsNullOrWhiteSpace(result.U_SeiTemp))
-                    return result.U_SeiTemp.Trim();
+		// ── MARCA ─────────────────────────────────────────────────────────
 
-                return null;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Error leyendo temporada del artículo {ItemCode}", itemCode);
-                return null;
-            }
-        }
+		public async Task<(string? MarcaCodigo, string? MarcaNumero)> GetMarcaAsync(string firstItemCode, CancellationToken ct)
+		{
+			var marcaCodigo = await TryGetItemFieldAsync(firstItemCode, "U_INTRX_PR_Marca", ct);
 
-        private async Task<string?> GetTemporadaFromMaestroAsync(string bouti, CancellationToken ct)
-        {
-            try
-            {
-                // Tabla de usuario via Service Layer
-                var url = $"INTRX_FM_TEMPOESHOP?$select=U_Temporada&$filter=U_Bouti eq '{bouti}'&$orderby=U_Temporada desc&$top=1";
-                var result = await _sl.GetAsync<SlListResponse<TemporadaMaestroDto>>(url, ct);
+			if (string.IsNullOrWhiteSpace(marcaCodigo))
+				marcaCodigo = await TryGetItemFieldAsync(firstItemCode, "U_SEIMarca", ct);
 
-                var temp = result?.Value?.FirstOrDefault()?.U_Temporada?.Trim();
+			if (string.IsNullOrWhiteSpace(marcaCodigo))
+			{
+				_logger.LogWarning("Artículo {ItemCode} sin marca definida.", firstItemCode);
+				return (null, null);
+			}
 
-                _logger.LogInformation(
-                    "Temporada tabla maestra (U_Bouti={Bouti}): {Temp}", bouti, temp ?? "null");
+			MarcaMap.TryGetValue(marcaCodigo, out var numero);
 
-                return temp;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Error consultando tabla maestra temporada (U_Bouti={Bouti})", bouti);
-                return null;
-            }
-        }
+			_logger.LogInformation(
+				"Marca artículo {ItemCode}: Código={Codigo} Número={Numero}",
+				firstItemCode, marcaCodigo, numero ?? "?");
 
-        // ─────────────────────────────────────────────────────────────────
-        // MARCA
-        // ─────────────────────────────────────────────────────────────────
+			return (marcaCodigo, numero);
+		}
 
-        public async Task<(string? MarcaCodigo, string? MarcaNumero)> GetMarcaAsync(string firstItemCode, CancellationToken ct)
-        {
-            try
-            {
-                var escaped = firstItemCode.Replace("'", "''");
-                var url = $"Items('{escaped}')?$select=U_INTX_EC_MARCA,U_SeiMarca";
-                var result = await _sl.GetAsync<ItemMarcaDto>(url, ct);
+		// ── HELPER GENÉRICO ───────────────────────────────────────────────
 
-                if (result == null) return (null, null);
+		/// <summary>
+		/// Intenta leer un campo de usuario de un artículo.
+		/// Si el campo no existe en SAP devuelve null sin lanzar excepción.
+		/// Loguea el nombre del campo que falla para facilitar el diagnóstico.
+		/// </summary>
+		private async Task<string?> TryGetItemFieldAsync(string itemCode, string fieldName, CancellationToken ct)
+		{
+			try
+			{
+				var escaped = itemCode.Replace("'", "''");
+				var url = $"Items('{escaped}')?$select={fieldName}";
+				var result = await _sl.GetAsync<Dictionary<string, object?>>(url, ct);
 
-                // Preferencia U_INTX_EC_MARCA, fallback U_SeiMarca
-                var marcaCodigo = !string.IsNullOrWhiteSpace(result.U_INTX_EC_MARCA)
-                    ? result.U_INTX_EC_MARCA.Trim()
-                    : result.U_SeiMarca?.Trim();
+				if (result == null || !result.TryGetValue(fieldName, out var val))
+					return null;
 
-                if (string.IsNullOrWhiteSpace(marcaCodigo))
-                {
-                    _logger.LogWarning("Artículo {ItemCode} sin marca definida.", firstItemCode);
-                    return (null, null);
-                }
+				var strVal = val?.ToString()?.Trim();
+				if (!string.IsNullOrWhiteSpace(strVal))
+					_logger.LogDebug("Campo {Field} del artículo {ItemCode}: {Value}", fieldName, itemCode, strVal);
 
-                MarcaMap.TryGetValue(marcaCodigo, out var numero);
+				return strVal;
+			}
+			catch (Exception)
+			{
+				// Campo no existe en esta instancia de SAP — log de diagnóstico
+				_logger.LogDebug("Campo {Field} no disponible en artículo {ItemCode} — se prueba el siguiente.", fieldName, itemCode);
+				return null;
+			}
+		}
 
-                _logger.LogInformation(
-                    "Marca artículo {ItemCode}: Código={Codigo} Número={Numero}",
-                    firstItemCode, marcaCodigo, numero ?? "?");
+		// ── DTOs ──────────────────────────────────────────────────────────
 
-                return (marcaCodigo, numero);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Error leyendo marca del artículo {ItemCode}", firstItemCode);
-                return (null, null);
-            }
-        }
+		private sealed class TemporadaMaestroDto
+		{
+			public string? U_Temporada { get; set; }
+		}
 
-        // ─────────────────────────────────────────────────────────────────
-        // DTOs internos
-        // ─────────────────────────────────────────────────────────────────
-
-        private sealed class ItemTemporadaDto
-        {
-            public string? U_INTRX_PR_Temporada { get; set; }
-            public string? U_SeiTemp { get; set; }
-        }
-
-        private sealed class ItemMarcaDto
-        {
-            public string? U_INTX_EC_MARCA { get; set; }
-            public string? U_SeiMarca { get; set; }
-        }
-
-        private sealed class TemporadaMaestroDto
-        {
-            public string? U_Temporada { get; set; }
-        }
-
-        private sealed class SlListResponse<T>
-        {
-            public List<T> Value { get; set; } = new();
-        }
-    }
+		private sealed class SlListResponse<T>
+		{
+			public List<T> Value { get; set; } = new();
+		}
+	}
 }

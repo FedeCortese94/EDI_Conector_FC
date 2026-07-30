@@ -10,6 +10,7 @@ namespace EDI_Conector_FC.Services.Remote
 	{
 		Task<List<FtpListItem>> ListAsync(CancellationToken ct);
 		Task DownloadAsync(string remoteFileName, string localFullPath, CancellationToken ct);
+		Task UploadAsync(string localFullPath, string remoteFullPath, CancellationToken ct);
 		Task DeleteAsync(string remoteFileName, CancellationToken ct);
 	}
 
@@ -28,12 +29,9 @@ namespace EDI_Conector_FC.Services.Remote
 		{
 			var cred = new NetworkCredential(_opt.User, _opt.Password);
 			var client = new AsyncFtpClient(_opt.Host, cred, _opt.Port);
-
-			// FTP clásico
 			client.Config.EncryptionMode = FtpEncryptionMode.None;
 			client.Config.ValidateAnyCertificate = false;
 			client.Config.DataConnectionType = FtpDataConnectionType.AutoPassive;
-
 			return client;
 		}
 
@@ -47,14 +45,12 @@ namespace EDI_Conector_FC.Services.Remote
 
 			var items = (await client.GetListing(ct)).ToList();
 
-			// Solo ficheros + prefijo si aplica
-			var files = items
+			return items
 				.Where(i => i.Type == FtpObjectType.File)
-				.Where(i => string.IsNullOrWhiteSpace(_opt.FilePrefix) || i.Name.StartsWith(_opt.FilePrefix, StringComparison.OrdinalIgnoreCase))
-				.OrderByDescending(i => i.Modified) // más recientes primero
+				.Where(i => string.IsNullOrWhiteSpace(_opt.FilePrefix)
+					|| i.Name.StartsWith(_opt.FilePrefix, StringComparison.OrdinalIgnoreCase))
+				.OrderByDescending(i => i.Modified)
 				.ToList();
-
-			return files;
 		}
 
 		public async Task DownloadAsync(string remoteFileName, string localFullPath, CancellationToken ct)
@@ -67,17 +63,32 @@ namespace EDI_Conector_FC.Services.Remote
 			if (!string.IsNullOrWhiteSpace(_opt.RemoteFolderOrders))
 				await client.SetWorkingDirectory(_opt.RemoteFolderOrders, ct);
 
-			var status = await client.DownloadFile(localFullPath,
-													remoteFileName,
-													FtpLocalExists.Overwrite,
-													FtpVerify.None,
-													progress: null,
-													token: ct);
+			var status = await client.DownloadFile(
+				localFullPath, remoteFileName,
+				FtpLocalExists.Overwrite, FtpVerify.None,
+				progress: null, token: ct);
 
 			if (status != FtpStatus.Success)
 				throw new Exception($"FTP download falló: {remoteFileName} -> {localFullPath}. Status={status}");
 
 			_logger.LogInformation("FTP descargado: {Remote} -> {Local}", remoteFileName, localFullPath);
+		}
+
+		public async Task UploadAsync(string localFullPath, string remoteFullPath, CancellationToken ct)
+		{
+			await using var client = CreateClient();
+			await client.Connect(ct);
+
+			var status = await client.UploadFile(
+				localFullPath, remoteFullPath,
+				FtpRemoteExists.Overwrite, createRemoteDir: true,
+				verifyOptions: FtpVerify.None,
+				progress: null, token: ct);
+
+			if (status != FtpStatus.Success)
+				throw new Exception($"FTP upload falló: {localFullPath} -> {remoteFullPath}. Status={status}");
+
+			_logger.LogInformation("FTP subido: {Local} -> {Remote}", localFullPath, remoteFullPath);
 		}
 
 		public async Task DeleteAsync(string remoteFileName, CancellationToken ct)

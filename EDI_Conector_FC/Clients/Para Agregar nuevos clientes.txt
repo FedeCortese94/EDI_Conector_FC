@@ -1,0 +1,21 @@
+Pasos para añadir un cliente nuevo
+1. Crear la carpeta del cliente:
+Clients/
+  Boozt/
+    config.json  ← ya existe
+  NuevoCliente/
+    config.json  ← crear este
+2. Copiar el config.json de Boozt como base y ajustar los valores:
+json{
+  "ClientId": "NuevoCliente",
+  "Enabled": true,
+  "Ftp": { ... },
+  "Paths": { ... },
+  "SapDefaults": {
+    "CardCode": "C99999",
+    ...
+  },
+  "Desadv": { ... },
+  "Invoic": { ... }
+}
+3. Arrancar el programa — lo detecta automáticamente.

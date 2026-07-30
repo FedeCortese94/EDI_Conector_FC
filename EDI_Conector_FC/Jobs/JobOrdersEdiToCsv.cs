@@ -140,7 +140,22 @@ namespace EDI_Conector_FC.Jobs
                     {
                         MoveFile(ediFile, paths.OrdersProcessed, ".EDI_OK");
                         _logger.LogInformation("EDI movido a Processed: {File}", fileName);
-                    }
+
+						// Borrar del FTP si se descargó de ahí
+						if (client.Ftp.Enabled)
+						{
+							try
+							{
+								var ftp = _ftpFactory.Create(client.Ftp);
+								await ftp.DeleteAsync(fileName, ct);
+								_logger.LogInformation("FTP: fichero eliminado: {File}", fileName);
+							}
+							catch (Exception exFtp)
+							{
+								_logger.LogWarning(exFtp, "FTP: no se pudo eliminar {File} — se procesó correctamente igualmente.", fileName);
+							}
+						}
+					}
                     else
                     {
                         // Inbox y Processed son la misma carpeta (modo TEST):

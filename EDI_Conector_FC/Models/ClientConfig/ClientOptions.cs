@@ -1,74 +1,86 @@
 namespace EDI_Conector_FC.Models.ClientConfig
 {
-    /// <summary>
-    /// ConfiguraciÃ³n completa de un cliente EDI.
-    /// Cada cliente tiene su propio fichero JSON en Clients/{ClientId}/config.json
-    /// </summary>
-    public sealed class ClientOptions
-    {
-        public string ClientId { get; set; } = "";
-        public string Description { get; set; } = "";
-        public bool Enabled { get; set; } = true;
+	public sealed class ClientOptions
+	{
+		public string ClientId { get; set; } = "";
+		public string Description { get; set; } = "";
+		public bool Enabled { get; set; } = true;
 
-        public ClientFtpOptions Ftp { get; set; } = new();
-        public ClientPathsOptions Paths { get; set; } = new();
-        public ClientSapDefaults SapDefaults { get; set; } = new();
-        public ClientParserOptions Parser { get; set; } = new();
-    }
+		public ClientFtpOptions Ftp { get; set; } = new();
+		public ClientPathsOptions Paths { get; set; } = new();
+		public ClientSapDefaults SapDefaults { get; set; } = new();
+		public ClientParserOptions Parser { get; set; } = new();
+		public ClientDesadvOptions Desadv { get; set; } = new();
+		public ClientInvoicOptions? Invoic { get; set; }
+	}
 
-    public sealed class ClientFtpOptions
-    {
-        /// <summary>Si false, se salta la descarga FTP y se usan los ficheros del Inbox directamente.</summary>
-        public bool Enabled { get; set; } = true;
-        public string Host { get; set; } = "";
-        public int Port { get; set; } = 21;
-        public string User { get; set; } = "";
-        public string Password { get; set; } = "";
-        public string RemoteFolderOrders { get; set; } = "";
-        public string FilePrefix { get; set; } = "";
-    }
+	public sealed class ClientFtpOptions
+	{
+		public bool Enabled { get; set; } = true;
+		public string Host { get; set; } = "";
+		public int Port { get; set; } = 21;
+		public string User { get; set; } = "";
+		public string Password { get; set; } = "";
+		public string RemoteFolderOrders { get; set; } = "";
+		public string FilePrefix { get; set; } = "";
+	}
 
-    public sealed class ClientPathsOptions
-    {
-        public string OrdersInbox { get; set; } = "";
-        public string OrdersCsv { get; set; } = "";
-        public string OrdersProcessed { get; set; } = "";
-        public string OrdersError { get; set; } = "";
-    }
+	public sealed class ClientPathsOptions
+	{
+		// Pedidos entrada
+		public string OrdersInbox { get; set; } = "";
+		public string OrdersCsv { get; set; } = "";
+		public string OrdersProcessed { get; set; } = "";
+		public string OrdersError { get; set; } = "";
 
-    public sealed class ClientSapDefaults
-    {
-        /// <summary>CardCode del cliente en SAP B1</summary>
-        public string CardCode { get; set; } = "";
+		// DESADV salida
+		public string DesadvOutbox { get; set; } = "";
+		public string DesadvProcessed { get; set; } = "";
+		public string DesadvError { get; set; } = "";
 
-        /// <summary>CÃ³digo de almacÃ©n por defecto</summary>
-        public string WarehouseCode { get; set; } = "";
+		// INVOIC salida
+		public string InvoicOutbox { get; set; } = "";
+		public string InvoicProcessed { get; set; } = "";
+		public string InvoicError { get; set; } = "";
+	}
 
-        /// <summary>Vendedor (SlpCode)</summary>
-        public int SlpCode { get; set; } = 0;
+	public sealed class ClientSapDefaults
+	{
+		public string CardCode { get; set; } = "";
+		public string WarehouseCode { get; set; } = "";
+		public string Currency { get; set; } = "EUR";
+		public string CommentsPrefix { get; set; } = "EDI";
+	}
 
-        /// <summary>Divisa</summary>
-        public string Currency { get; set; } = "EUR";
+	public sealed class ClientParserOptions
+	{
+		public int EanPadToLength { get; set; } = 0;
+	}
 
-        /// <summary>Grupo de pago (GroupNumber)</summary>
-        public int GroupNumber { get; set; } = 0;
+	public sealed class ClientDesadvOptions
+	{
+		public bool Enabled { get; set; } = true;
+		public string GlnRemitente { get; set; } = "";
+		public string FtpFolderDesadv { get; set; } = "/transactions/desadv/in";
+		public bool MarcarComoEnviado { get; set; } = true;
+	}
 
-        /// <summary>MÃ©todo de pago (PaymentMethod)</summary>
-        public string PaymentMethod { get; set; } = "";
+	public sealed class ClientInvoicOptions
+	{
+		public bool Enabled { get; set; } = true;
+		public string GlnRemitente { get; set; } = "";
 
-        /// <summary>CÃ³digo transportista</summary>
-        public int Transportista { get; set; } = 0;
+		/// <summary>GLN fallback si el BP no tiene U_SEIPOEDI informado.</summary>
+		public string GlnDestinatarioFallback { get; set; } = "";
 
-        /// <summary>Comentario base que se aÃ±ade al pedido</summary>
-        public string CommentsPrefix { get; set; } = "EDI";
-    }
+		public string FtpFolderInvoic { get; set; } = "/transactions/invoic/in";
+		public bool MarcarComoEnviada { get; set; } = true;
 
-    public sealed class ClientParserOptions
-    {
-        /// <summary>
-        /// Longitud objetivo del EAN. Si el EAN viene corto se rellena con ceros por la izquierda.
-        /// EstÃ¡ndar: 13. Poner 0 para no rellenar.
-        /// </summary>
-        public int EanPadToLength { get; set; } = 13;
-    }
+		/// <summary>
+		/// VAT ID (número identificación fiscal) del comprador.
+		/// Va en SINCP BY campo 18. Obligatorio para operaciones intracomunitarias.
+		/// Si está vacío se omite (campo queda en blanco).
+		/// </summary>
+		public string VatIdComprador { get; set; } = "";
+	}
 }
