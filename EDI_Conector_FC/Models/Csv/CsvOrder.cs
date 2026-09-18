@@ -29,5 +29,11 @@ namespace EDI_Conector_FC.Models.Csv
 		public decimal Price { get; set; }
 		public string WarehouseCode { get; set; } = "";
 		public string Ean { get; set; } = "";
+
+		/// <summary>Código del pack (@INTRX_KT_PACK) si esta línea salió de explotar un pack; vacío si es un artículo suelto.</summary>
+		public string PackCode { get; set; } = "";
+
+		/// <summary>Cantidad de packs pedidos que originaron esta línea (U_INTRX_KT_QPACK).</summary>
+		public decimal PackQty { get; set; }
 	}
 }

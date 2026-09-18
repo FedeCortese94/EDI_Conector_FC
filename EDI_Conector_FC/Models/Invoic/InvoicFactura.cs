@@ -30,7 +30,18 @@
 		public string Ean { get; set; } = "";        // ← añadir
 		public string Descripcion { get; set; } = "";
 		public decimal Quantity { get; set; }
+
+		/// <summary>Precio Bruto Unitario — precio de lista, tal como lo devuelve SAP.</summary>
 		public decimal Price { get; set; }
-		public decimal TotalLinea => Quantity * Price;
+
+		/// <summary>Precio Neto Unitario — precio después del descuento de cabecera (PRI+AAB→AAA).</summary>
+		public decimal PrecioNeto { get; set; }
+
+		/// <summary>Importe Total Neto de la Línea de Artículo — Cantidad × Precio Neto Unitario.</summary>
+		public decimal TotalLinea { get; set; }
+
+		// ── Uso interno: para agrupar componentes del mismo pack en una sola línea de salida ──
+		public string PackCode { get; set; } = "";
+		public decimal PackQty { get; set; }
 	}
 }

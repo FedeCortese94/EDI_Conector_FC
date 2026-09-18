@@ -26,6 +26,11 @@
 		public string ItemCode { get; set; } = "";
 		public decimal Quantity { get; set; }
 		public string WarehouseCode { get; set; } = "";
+
+		// ── Trazabilidad de pack (@INTRX_KT_PACK) — solo si la línea vino de explotar un pack ──
+		public string? U_INTRX_KT_PACK { get; set; }
+		public string? U_INTRX_KT_CPACK { get; set; }
+		public decimal? U_INTRX_KT_QPACK { get; set; }
 	}
 
 	public sealed class SalesOrderCreateResponse

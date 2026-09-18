@@ -25,6 +25,8 @@
 		public decimal Price { get; set; }
 		public int? BaseDocNum { get; set; }
 		public int? BaseEntry { get; set; }                 // DocEntry del albarán origen
+		public string? U_INTRX_KT_PACK { get; set; }
+		public decimal? U_INTRX_KT_QPACK { get; set; }
 	}
 
 	public sealed class SlInvoicListResponse

@@ -16,16 +16,19 @@ namespace EDI_Conector_FC.Services.CsvGenerator
 	public sealed class OrderCsvGenerator : IOrderCsvGenerator
 	{
 		private readonly IItemResolverService _itemResolver;
+		private readonly IPackResolverService _packResolver;
 		private readonly IBooztMetadataService _metadata;
 		private readonly ILogger<OrderCsvGenerator> _logger;
 		private const char Tab = '\t';
 
 		public OrderCsvGenerator(
 			IItemResolverService itemResolver,
+			IPackResolverService packResolver,
 			IBooztMetadataService metadata,
 			ILogger<OrderCsvGenerator> logger)
 		{
 			_itemResolver = itemResolver;
+			_packResolver = packResolver;
 			_metadata = metadata;
 			_logger = logger;
 		}
@@ -44,6 +47,33 @@ namespace EDI_Conector_FC.Services.CsvGenerator
 				ct.ThrowIfCancellationRequested();
 
 				var ean = PadEan(ln.Ean, clientOpts.Parser.EanPadToLength);
+
+				// ── Primero: ¿el EAN es un pack (@INTRX_KT_PACK)? ──────────
+				var pack = await _packResolver.ResolvePackByEanAsync(ean, ct);
+				if (pack != null)
+				{
+					foreach (var component in pack.Components)
+					{
+						csvLines.Add(new CsvOrderLine
+						{
+							ItemCode = component.ItemCode,
+							Quantity = ln.Quantity * component.Quantity,
+							Price = 0m,
+							WarehouseCode = sap.WarehouseCode,
+							Ean = ean,
+							PackCode = pack.Code,
+							PackQty = ln.Quantity,
+						});
+					}
+
+					_logger.LogInformation(
+						"EAN {Ean} explotado como pack {PackCode} — {Count} componente(s).",
+						ean, pack.Code, pack.Components.Count);
+					resolved++;
+					continue;
+				}
+
+				// ── Si no es un pack, resolución normal por EAN suelto ─────
 				var itemCode = await _itemResolver.ResolveItemCodeFromEanAsync(ean, ct);
 
 				if (string.IsNullOrWhiteSpace(itemCode))
@@ -144,7 +174,9 @@ namespace EDI_Conector_FC.Services.CsvGenerator
 					ln.Quantity.ToString("0.###", CultureInfo.InvariantCulture),
 					ln.Price.ToString("0.##", CultureInfo.InvariantCulture),
 					ln.WarehouseCode,
-					ln.Ean));
+					ln.Ean,
+					ln.PackCode,
+					ln.PackQty.ToString("0.###", CultureInfo.InvariantCulture)));
 			}
 
 			await File.WriteAllTextAsync(path, sb.ToString(), Encoding.UTF8);

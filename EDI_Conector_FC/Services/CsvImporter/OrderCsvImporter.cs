@@ -51,12 +51,21 @@ namespace EDI_Conector_FC.Services.CsvImporter
 
 			foreach (var ln in csvOrder.Lines)
 			{
-				req.DocumentLines.Add(new SalesOrderLine
+				var line = new SalesOrderLine
 				{
 					ItemCode = ln.ItemCode,
 					Quantity = ln.Quantity,
 					WarehouseCode = ln.WarehouseCode,
-				});
+				};
+
+				if (!string.IsNullOrWhiteSpace(ln.PackCode))
+				{
+					line.U_INTRX_KT_PACK = ln.PackCode;
+					line.U_INTRX_KT_CPACK = ln.PackCode;
+					line.U_INTRX_KT_QPACK = ln.PackQty;
+				}
+
+				req.DocumentLines.Add(line);
 			}
 
 			_logger.LogInformation(

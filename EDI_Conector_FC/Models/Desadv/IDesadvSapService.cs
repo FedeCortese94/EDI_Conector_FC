@@ -1,5 +1,6 @@
 ﻿using EDI_Conector_FC.Models.ClientConfig;
 using EDI_Conector_FC.Models.Desadv;
+using EDI_Conector_FC.Services.ServiceSAP;
 using EDI_Conector_FC.Services.ServiceSAP.Http;
 using Microsoft.Extensions.Logging;
 
@@ -14,11 +15,13 @@ namespace EDI_Conector_FC.Services.Desadv
 	public sealed class DesadvSapService : IDesadvSapService
 	{
 		private readonly ServiceLayerClient _sl;
+		private readonly IPackResolverService _packResolver;
 		private readonly ILogger<DesadvSapService> _logger;
 
-		public DesadvSapService(ServiceLayerClient sl, ILogger<DesadvSapService> logger)
+		public DesadvSapService(ServiceLayerClient sl, IPackResolverService packResolver, ILogger<DesadvSapService> logger)
 		{
 			_sl = sl;
+			_packResolver = packResolver;
 			_logger = logger;
 		}
 
@@ -152,22 +155,58 @@ namespace EDI_Conector_FC.Services.Desadv
 			};
 
 			int bultoNum = 1, lineIdx = 0;
+
+			// Agrupar líneas que pertenecen al mismo pack (mismo U_INTRX_KT_PACK + U_INTRX_KT_QPACK)
+			// en una única línea de salida, manteniendo la posición original del documento:
+			// el grupo aparece donde aparece su primera línea; las repeticiones posteriores del
+			// mismo pack se saltan. Las líneas sueltas (sin pack) se procesan como siempre.
+			var cantidadPorGrupo = dn.DocumentLines
+				.Where(l => !string.IsNullOrWhiteSpace(l.U_INTRX_KT_PACK))
+				.GroupBy(l => (l.U_INTRX_KT_PACK, l.U_INTRX_KT_QPACK))
+				.ToDictionary(g => g.Key, g => g.Sum(l => l.Quantity));
+
+			var gruposEmitidos = new HashSet<(string?, decimal?)>();
+
 			foreach (var ln in dn.DocumentLines)
 			{
 				ct.ThrowIfCancellationRequested();
-				var ean = ln.BarCode?.Trim();
-				if (string.IsNullOrWhiteSpace(ean))
-					ean = await GetEanFromItemAsync(ln.ItemCode ?? "", ct);
 
-				albaran.Lineas.Add(new DesadvLinea
+				if (!string.IsNullOrWhiteSpace(ln.U_INTRX_KT_PACK))
 				{
-					LineNum = lineIdx,
-					Bulto = bultoNum,
-					ItemCode = ln.ItemCode ?? "",
-					Descripcion = NormalizeText(ln.ItemDescription ?? ""),
-					Ean = ean ?? "",
-					Cantidad = ln.Quantity,
-				});
+					var key = (ln.U_INTRX_KT_PACK, ln.U_INTRX_KT_QPACK);
+					if (!gruposEmitidos.Add(key))
+						continue; // ya se emitió la línea unificada de este pack
+
+					var packCode = ln.U_INTRX_KT_PACK!;
+					var pack = await _packResolver.GetPackByCodeAsync(packCode, ct);
+
+					albaran.Lineas.Add(new DesadvLinea
+					{
+						LineNum = lineIdx,
+						Bulto = bultoNum,
+						ItemCode = packCode,
+						Descripcion = NormalizeText(pack?.Descripcion ?? ""),
+						Ean = pack?.Ean ?? "",
+						Cantidad = cantidadPorGrupo[key],
+					});
+				}
+				else
+				{
+					var ean = ln.BarCode?.Trim();
+					if (string.IsNullOrWhiteSpace(ean))
+						ean = await GetEanFromItemAsync(ln.ItemCode ?? "", ct);
+
+					albaran.Lineas.Add(new DesadvLinea
+					{
+						LineNum = lineIdx,
+						Bulto = bultoNum,
+						ItemCode = ln.ItemCode ?? "",
+						Descripcion = NormalizeText(ln.ItemDescription ?? ""),
+						Ean = ean ?? "",
+						Cantidad = ln.Quantity,
+					});
+				}
+
 				lineIdx++;
 				bultoNum++;
 			}

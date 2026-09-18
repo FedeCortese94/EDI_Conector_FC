@@ -64,12 +64,15 @@ namespace EDI_Conector_FC.Services.CsvImporter
 					ItemCode = itemCode,
 					WarehouseCode = Col(cols, 3),
 					Ean = Col(cols, 4),
+					PackCode = Col(cols, 5),
 				};
 
 				if (decimal.TryParse(Col(cols, 1), NumberStyles.Any, CultureInfo.InvariantCulture, out var qty))
 					line.Quantity = qty;
 				if (decimal.TryParse(Col(cols, 2), NumberStyles.Any, CultureInfo.InvariantCulture, out var price))
 					line.Price = price;
+				if (decimal.TryParse(Col(cols, 6), NumberStyles.Any, CultureInfo.InvariantCulture, out var packQty))
+					line.PackQty = packQty;
 
 				order.Lines.Add(line);
 			}

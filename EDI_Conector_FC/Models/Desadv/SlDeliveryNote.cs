@@ -21,6 +21,8 @@
 		public decimal Quantity { get; set; }
 		public string? BarCode { get; set; }
 		public int? BaseEntry { get; set; }                 // DocEntry del pedido origen
+		public string? U_INTRX_KT_PACK { get; set; }
+		public decimal? U_INTRX_KT_QPACK { get; set; }
 	}
 
 	public sealed class SlSalesOrder

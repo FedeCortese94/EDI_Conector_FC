@@ -174,9 +174,9 @@ namespace EDI_Conector_FC.Services.Invoic
 				sb.Append(Str("", 75));
 				sb.Append(NumR(FormatCantidad(ln.Quantity), 16));
 				sb.Append(Str("", 54));
-				sb.Append(NumR(FormatImporteLinea(ln.TotalLinea), 18));
-				sb.Append(NumR(FormatPrecio(ln.Price), 16));
-				sb.Append(NumR(FormatPrecio(ln.Price), 16));
+				sb.Append(NumR(FormatImporteLinea(ln.TotalLinea), 18));   // Importe Total Neto de línea
+				sb.Append(NumR(FormatPrecio(ln.Price), 16));              // Precio Bruto Unitario
+				sb.Append(NumR(FormatPrecio(ln.PrecioNeto), 16));         // Precio Neto Unitario
 				sb.Append(Str("", 6));
 				sb.Append("EXT         ");  // Boozt = exportación
 				sb.Append(Str("", 263));

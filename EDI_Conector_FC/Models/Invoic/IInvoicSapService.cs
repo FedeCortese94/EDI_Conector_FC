@@ -1,6 +1,7 @@
 ﻿using EDI_Conector_FC.Models.ClientConfig;
 using EDI_Conector_FC.Models.Desadv;
 using EDI_Conector_FC.Models.Invoic;
+using EDI_Conector_FC.Services.ServiceSAP;
 using EDI_Conector_FC.Services.ServiceSAP.Http;
 using Microsoft.Extensions.Logging;
 
@@ -15,11 +16,13 @@ namespace EDI_Conector_FC.Services.Invoic
 	public sealed class InvoicSapService : IInvoicSapService
 	{
 		private readonly ServiceLayerClient _sl;
+		private readonly IPackResolverService _packResolver;
 		private readonly ILogger<InvoicSapService> _logger;
 
-		public InvoicSapService(ServiceLayerClient sl, ILogger<InvoicSapService> logger)
+		public InvoicSapService(ServiceLayerClient sl, IPackResolverService packResolver, ILogger<InvoicSapService> logger)
 		{
 			_sl = sl;
+			_packResolver = packResolver;
 			_logger = logger;
 		}
 
@@ -180,14 +183,115 @@ namespace EDI_Conector_FC.Services.Invoic
 					Descripcion = NormalizeText(ln.ItemDescription ?? ""),
 					Quantity = ln.Quantity,
 					Price = ln.Price,
+					PackCode = ln.U_INTRX_KT_PACK ?? "",
+					PackQty = ln.U_INTRX_KT_QPACK ?? 0,
 				});
 			}
+
+			CalcularPrecioYTotalNeto(factura);
+			await AgruparLineasDePackAsync(factura, ct);
 
 			_logger.LogInformation(
 				"INVOIC: factura {DocNum} — {Count} línea(s) — Total={Total} GLN_BY={Gln} GLN_DP={Dp}",
 				factura.DocNum, factura.Lineas.Count, factura.Total, glnCliente, factura.GlnPuntoEntrega);
 
 			return factura;
+		}
+
+		/// <summary>
+		/// SAP no reparte el descuento de cabecera en el precio de cada línea:
+		/// el Price/LineTotal que devuelve es el precio de lista (Precio Bruto
+		/// Unitario). Nexmart confirmó que el Precio Neto Unitario y el Importe
+		/// Total Neto de línea deben reflejar el descuento, así que se prorratea
+		/// proporcionalmente para que la suma de líneas cuadre exacto con el
+		/// total facturado (factura.Neto). La última línea absorbe el redondeo.
+		/// </summary>
+		private static void CalcularPrecioYTotalNeto(InvoicFactura factura)
+		{
+			if (factura.Lineas.Count == 0) return;
+
+			var sumaBruta = factura.Lineas.Sum(l => l.Quantity * l.Price);
+
+			if (sumaBruta == 0)
+			{
+				foreach (var linea in factura.Lineas)
+				{
+					linea.PrecioNeto = linea.Price;
+					linea.TotalLinea = 0m;
+				}
+				return;
+			}
+
+			var factor = factura.Neto / sumaBruta;
+			decimal acumulado = 0m;
+
+			for (int i = 0; i < factura.Lineas.Count; i++)
+			{
+				var linea = factura.Lineas[i];
+				linea.PrecioNeto = Math.Round(linea.Price * factor, 3);
+
+				if (i == factura.Lineas.Count - 1)
+				{
+					// Última línea absorbe el redondeo para que la suma sea exacta.
+					linea.TotalLinea = Math.Round(factura.Neto - acumulado, 3);
+				}
+				else
+				{
+					linea.TotalLinea = Math.Round(linea.Quantity * linea.Price * factor, 3);
+					acumulado += linea.TotalLinea;
+				}
+			}
+		}
+
+		/// <summary>
+		/// Une en una sola línea de salida todos los componentes que pertenecen al
+		/// mismo pack (mismo PackCode + PackQty), usando el EAN y la descripción
+		/// del propio pack. Mantiene la posición original del documento: el grupo
+		/// aparece donde aparece su primer componente; las repeticiones posteriores
+		/// del mismo pack se saltan. Las líneas sin pack quedan sin cambios.
+		/// </summary>
+		private async Task AgruparLineasDePackAsync(InvoicFactura factura, CancellationToken ct)
+		{
+			if (!factura.Lineas.Any(l => !string.IsNullOrWhiteSpace(l.PackCode))) return;
+
+			var totalesPorGrupo = factura.Lineas
+				.Where(l => !string.IsNullOrWhiteSpace(l.PackCode))
+				.GroupBy(l => (l.PackCode, l.PackQty))
+				.ToDictionary(g => g.Key, g => (Cantidad: g.Sum(l => l.Quantity), Importe: g.Sum(l => l.TotalLinea), Bruto: g.Sum(l => l.Quantity * l.Price)));
+
+			var resultado = new List<InvoicLinea>();
+			var gruposEmitidos = new HashSet<(string, decimal)>();
+
+			foreach (var linea in factura.Lineas)
+			{
+				if (string.IsNullOrWhiteSpace(linea.PackCode))
+				{
+					resultado.Add(linea);
+					continue;
+				}
+
+				var key = (linea.PackCode, linea.PackQty);
+				if (!gruposEmitidos.Add(key))
+					continue; // ya se emitió la línea unificada de este pack
+
+				var pack = await _packResolver.GetPackByCodeAsync(linea.PackCode, ct);
+				var (cantidadTotal, importeTotal, brutoTotal) = totalesPorGrupo[key];
+
+				resultado.Add(new InvoicLinea
+				{
+					ItemCode = linea.PackCode,
+					Ean = pack?.Ean ?? "",
+					Descripcion = NormalizeText(pack?.Descripcion ?? ""),
+					Quantity = cantidadTotal,
+					Price = cantidadTotal == 0 ? 0m : Math.Round(brutoTotal / cantidadTotal, 3),
+					PrecioNeto = cantidadTotal == 0 ? 0m : Math.Round(importeTotal / cantidadTotal, 3),
+					TotalLinea = importeTotal,
+				});
+			}
+
+			factura.Lineas = resultado;
+			for (int i = 0; i < factura.Lineas.Count; i++)
+				factura.Lineas[i].LineNum = i;
 		}
 
 		private static string FormatDate(string? sapDate)

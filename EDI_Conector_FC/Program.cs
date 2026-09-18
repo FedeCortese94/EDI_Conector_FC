@@ -22,6 +22,13 @@ builder.Configuration
 	.SetBasePath(AppContext.BaseDirectory)
 	.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
 
+// Permite que el mismo .exe corra como consola (debug) o como Servicio de Windows.
+// Solo activa el ciclo de vida de servicio cuando el SO realmente lo arranca como tal.
+builder.Services.AddWindowsService(options =>
+{
+	options.ServiceName = "EDI_Conector_FC";
+});
+
 // ── Serilog ───────────────────────────────────────────────────────────────────
 Log.Logger = new LoggerConfiguration()
 	.WriteTo.Console()
@@ -45,6 +52,7 @@ builder.Services.Configure<SapOptions>(builder.Configuration.GetSection("LoginSA
 builder.Services.AddSingleton<ServiceLoginSL>();
 builder.Services.AddSingleton<ServiceLayerClient>();
 builder.Services.AddSingleton<IItemResolverService, ItemResolverService>();
+builder.Services.AddSingleton<IPackResolverService, PackResolverService>();
 builder.Services.AddSingleton<IBooztMetadataService, BooztMetadataService>();
 
 // ── FTP ───────────────────────────────────────────────────────────────────────
