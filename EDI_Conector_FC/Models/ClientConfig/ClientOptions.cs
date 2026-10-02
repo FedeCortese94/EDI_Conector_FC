@@ -12,6 +12,7 @@ namespace EDI_Conector_FC.Models.ClientConfig
 		public ClientParserOptions Parser { get; set; } = new();
 		public ClientDesadvOptions Desadv { get; set; } = new();
 		public ClientInvoicOptions? Invoic { get; set; }
+		public ClientOrdRspOptions? OrdRsp { get; set; }
 	}
 
 	public sealed class ClientFtpOptions
@@ -42,6 +43,11 @@ namespace EDI_Conector_FC.Models.ClientConfig
 		public string InvoicOutbox { get; set; } = "";
 		public string InvoicProcessed { get; set; } = "";
 		public string InvoicError { get; set; } = "";
+
+		// ORDRSP salida (confirmaciÃ³n de pedido tras pasar de Draft a definitivo)
+		public string OrdRspOutbox { get; set; } = "";
+		public string OrdRspProcessed { get; set; } = "";
+		public string OrdRspError { get; set; } = "";
 	}
 
 	public sealed class ClientSapDefaults
@@ -77,10 +83,27 @@ namespace EDI_Conector_FC.Models.ClientConfig
 		public bool MarcarComoEnviada { get; set; } = true;
 
 		/// <summary>
-		/// VAT ID (número identificación fiscal) del comprador.
+		/// VAT ID (nï¿½mero identificaciï¿½n fiscal) del comprador.
 		/// Va en SINCP BY campo 18. Obligatorio para operaciones intracomunitarias.
-		/// Si está vacío se omite (campo queda en blanco).
+		/// Si estï¿½ vacï¿½o se omite (campo queda en blanco).
 		/// </summary>
 		public string VatIdComprador { get; set; } = "";
+	}
+
+	public sealed class ClientOrdRspOptions
+	{
+		public bool Enabled { get; set; } = true;
+		public string GlnRemitente { get; set; } = "";
+
+		/// <summary>GLN fallback si el BP no tiene U_SEIPOEDI informado.</summary>
+		public string GlnDestinatarioFallback { get; set; } = "";
+
+		public string FtpFolderOrdRsp { get; set; } = "/transactions/ordrsp/in";
+
+		/// <summary>
+		/// Usa el campo dedicado U_EDI_ORDRSP del Pedido (vacÃ­o/null/'3' = pendiente o
+		/// reenviar, '1' = ya enviado, '2' = pedido anterior a esta funcionalidad, excluido).
+		/// </summary>
+		public bool MarcarComoEnviado { get; set; } = true;
 	}
 }

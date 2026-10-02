@@ -1,9 +1,11 @@
-﻿using EDI_Conector_FC.Models.ClientConfig;
+﻿using EDI_Conector_FC.Models;
+using EDI_Conector_FC.Models.ClientConfig;
 using EDI_Conector_FC.Models.Desadv;
 using EDI_Conector_FC.Models.Invoic;
 using EDI_Conector_FC.Services.ServiceSAP;
 using EDI_Conector_FC.Services.ServiceSAP.Http;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace EDI_Conector_FC.Services.Invoic
 {
@@ -17,12 +19,18 @@ namespace EDI_Conector_FC.Services.Invoic
 	{
 		private readonly ServiceLayerClient _sl;
 		private readonly IPackResolverService _packResolver;
+		private readonly IOptions<PacksOptions> _packsOptions;
 		private readonly ILogger<InvoicSapService> _logger;
 
-		public InvoicSapService(ServiceLayerClient sl, IPackResolverService packResolver, ILogger<InvoicSapService> logger)
+		public InvoicSapService(
+			ServiceLayerClient sl,
+			IPackResolverService packResolver,
+			IOptions<PacksOptions> packsOptions,
+			ILogger<InvoicSapService> logger)
 		{
 			_sl = sl;
 			_packResolver = packResolver;
+			_packsOptions = packsOptions;
 			_logger = logger;
 		}
 
@@ -252,6 +260,7 @@ namespace EDI_Conector_FC.Services.Invoic
 		/// </summary>
 		private async Task AgruparLineasDePackAsync(InvoicFactura factura, CancellationToken ct)
 		{
+			if (!_packsOptions.Value.EnviarPacksUnificados) return;
 			if (!factura.Lineas.Any(l => !string.IsNullOrWhiteSpace(l.PackCode))) return;
 
 			var totalesPorGrupo = factura.Lineas

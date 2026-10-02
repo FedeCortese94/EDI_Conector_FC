@@ -7,6 +7,7 @@ using EDI_Conector_FC.Services.CsvImporter;
 using EDI_Conector_FC.Services.Desadv;
 using EDI_Conector_FC.Services.Invoic;
 using EDI_Conector_FC.Services.OrdersIn;
+using EDI_Conector_FC.Services.OrdRsp;
 using EDI_Conector_FC.Services.Remote;
 using EDI_Conector_FC.Services.ServiceSAP;
 using EDI_Conector_FC.Services.ServiceSAP.Http;
@@ -46,6 +47,7 @@ builder.Services.AddSerilog();
 builder.Services.Configure<JobsOptions>(builder.Configuration.GetSection("Jobs"));
 builder.Services.Configure<QuartzScheduleOptions>(builder.Configuration.GetSection("Quartz"));
 builder.Services.Configure<SapOptions>(builder.Configuration.GetSection("LoginSAP"));
+builder.Services.Configure<PacksOptions>(builder.Configuration.GetSection("Packs"));
 
 
 // ── SAP Service Layer ─────────────────────────────────────────────────────────
@@ -76,6 +78,10 @@ builder.Services.AddSingleton<IDesadvFileGenerator, DesadvFileGenerator>();
 builder.Services.AddSingleton<IInvoicSapService, InvoicSapService>();
 builder.Services.AddSingleton<IInvoicFileGenerator, InvoicFileGenerator>();
 
+// ── ORDRSP salida (confirmación de pedido) ──────────────────────────────────────
+builder.Services.AddSingleton<IOrdRspSapService, OrdRspSapService>();
+builder.Services.AddSingleton<IOrdRspFileGenerator, OrdRspFileGenerator>();
+
 // ── Procesador legacy ECI ─────────────────────────────────────────────────────
 builder.Services.AddScoped<IOrdersInProcessor, OrdersInProcessor>();
 
@@ -98,6 +104,7 @@ builder.Services.AddQuartz(q =>
 	//if (jobs.JobOrdersIn) AddJob<JobOrdersIn>(nameof(JobOrdersIn), cron.JobOrdersIn);
 	if (jobs.JobDesadvOut) AddJob<JobDesadvOut>(nameof(JobDesadvOut), cron.JobDesadvOut);
 	if (jobs.JobInvoicesOut) AddJob<JobInvoicesOut>(nameof(JobInvoicesOut), cron.JobInvoicesOut);
+	if (jobs.JobOrdRspOut) AddJob<JobOrdRspOut>(nameof(JobOrdRspOut), cron.JobOrdRspOut);
 	if (jobs.JobOrdersEdiToCsv) AddJob<JobOrdersEdiToCsv>(nameof(JobOrdersEdiToCsv), cron.JobOrdersEdiToCsv);
 	if (jobs.JobOrdersCsvToSap) AddJob<JobOrdersCsvToSap>(nameof(JobOrdersCsvToSap), cron.JobOrdersCsvToSap);
 });

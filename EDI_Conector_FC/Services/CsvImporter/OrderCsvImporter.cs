@@ -75,13 +75,15 @@ namespace EDI_Conector_FC.Services.CsvImporter
 				req.U_INTRX_PR_MARCA ?? "-", req.U_SEIMARCA ?? "-",
 				req.U_SEI_PO_EDI ?? "-");
 
-			var response = await _sl.PostAsync<SalesOrderCreateRequest, SalesOrderCreateResponse>("Orders", req);
+			// Se postea como Draft (preliminar) — queda pendiente de revisión manual en SAP
+			// para convertirse en pedido definitivo. No hay promoción automática.
+			var response = await _sl.PostAsync<SalesOrderCreateRequest, SalesOrderCreateResponse>("Drafts", req);
 
 			if (response is null)
 				throw new InvalidOperationException("SAP B1 no devolvió respuesta.");
 
 			_logger.LogInformation(
-				"SAP OK: NumAtCard={NumAtCard} DocEntry={DocEntry} DocNum={DocNum}",
+				"SAP OK (Draft): NumAtCard={NumAtCard} DocEntry={DocEntry} DocNum={DocNum}",
 				csvOrder.NumAtCard, response.DocEntry, response.DocNum);
 
 			return response;

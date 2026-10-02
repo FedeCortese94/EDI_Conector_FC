@@ -2,6 +2,12 @@
 {
 	public sealed class SalesOrderCreateRequest
 	{
+		/// <summary>
+		/// Fijo en "17" (Sales Order) — necesario cuando se postea a /Drafts para que SAP
+		/// sepa qué tipo de documento preliminar crear.
+		/// </summary>
+		public string DocObjectCode { get; set; } = "17";
+
 		public string CardCode { get; set; } = "";
 		public string DocDate { get; set; } = "";
 		public string DocDueDate { get; set; } = "";

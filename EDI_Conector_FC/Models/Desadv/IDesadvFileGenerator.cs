@@ -131,7 +131,12 @@ namespace EDI_Conector_FC.Services.Desadv
 			sb.AppendLine();
 
 			// ── SEH1P + SEH1L por cada línea/bulto ───────────────────────
-			int bultoActual = -1;
+			// linea.Bulto es el número real de bulto (U_SEI_NumBulto, puede ser grande);
+			// se usa para el SSCC. "posicion" es un contador chico y secuencial, propio de
+			// la numeración interna de segmentos SEH1P del fichero (no tiene relación con
+			// el número de bulto real).
+			int bultoActual = int.MinValue;
+			int posicion = 0;
 
 			for (int i = 0; i < albaran.Lineas.Count; i++)
 			{
@@ -140,10 +145,11 @@ namespace EDI_Conector_FC.Services.Desadv
 				if (linea.Bulto != bultoActual)
 				{
 					bultoActual = linea.Bulto;
+					posicion++;
 					var sscc = GenerarSscc(albaran.DocNum, bultoActual);
 
 					sb.Append("SEH1P ");
-					sb.Append(Str((bultoActual + 2).ToString(), 12));
+					sb.Append(Str((posicion + 2).ToString(), 12));
 					sb.Append(Str("2", 12));
 					sb.Append(NumR("1", 8));
 					sb.Append("            CT    ");
@@ -192,13 +198,26 @@ namespace EDI_Conector_FC.Services.Desadv
 		private static string NLinea(int idx)
 			=> (idx + 1).ToString().PadLeft(6);
 
+		/// <summary>
+		/// Arma el SSCC (18 dígitos: prefijo de 9 + 8 dígitos de referencia serial + dígito
+		/// de control). El bulto real (U_SEI_NumBulto) puede tener varios dígitos, así que se
+		/// usa completo y se recorta cuánto se toma del DocNum para que el total siga dando 17
+		/// dígitos antes del dígito de control. Si el bulto ocupara más de 8 dígitos (caso
+		/// extremo), se toman sus últimos 8.
+		/// </summary>
 		private static string GenerarSscc(string docNum, int bulto)
 		{
-			string prefijo = "084357207";
-			string numPart = docNum.Length > 1 ? docNum[1..] : docNum;
-			if (bulto > 999) numPart = docNum.Length > 3 ? docNum[3..] : docNum;
-			else if (bulto > 99) numPart = docNum.Length > 2 ? docNum[2..] : docNum;
-			string bultoPart = bulto < 10 ? "0" + bulto : bulto.ToString();
+			const string prefijo = "084357207"; // 9 dígitos
+			const int espacioSerial = 8; // 17 - 9
+
+			string bultoPart = Math.Abs(bulto).ToString(System.Globalization.CultureInfo.InvariantCulture);
+			if (bultoPart.Length > espacioSerial) bultoPart = bultoPart[^espacioSerial..];
+
+			int numLen = espacioSerial - bultoPart.Length;
+			string numPart = numLen <= 0
+				? ""
+				: (docNum.Length >= numLen ? docNum[^numLen..] : docNum.PadLeft(numLen, '0'));
+
 			string codigo = prefijo + numPart + bultoPart;
 			return codigo + CalcularDigitoControl(codigo);
 		}

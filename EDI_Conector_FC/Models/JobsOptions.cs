@@ -6,6 +6,7 @@ namespace EDI_Conector_FC.Models
         //public bool JobOrdersIn { get; set; }
         public bool JobDesadvOut { get; set; }
         public bool JobInvoicesOut { get; set; }
+        public bool JobOrdRspOut { get; set; }
 
         // Jobs nuevos (multi-cliente via CSV)
         public bool JobOrdersEdiToCsv { get; set; }

@@ -25,7 +25,11 @@
 
     "InvoicOutbox": "C:\\Proyectos SAP Business One\\Bellavista_Progrmas\\EDI_Conector_FC\\EDI_Conector_FC\\Clients\\Boozt\\INVOIC\\Outbox",
     "InvoicProcessed": "C:\\Proyectos SAP Business One\\Bellavista_Progrmas\\EDI_Conector_FC\\EDI_Conector_FC\\Clients\\Boozt\\INVOIC\\Processed",
-    "InvoicError": "C:\\Proyectos SAP Business One\\Bellavista_Progrmas\\EDI_Conector_FC\\EDI_Conector_FC\\Clients\\Boozt\\INVOIC\\Error"
+    "InvoicError": "C:\\Proyectos SAP Business One\\Bellavista_Progrmas\\EDI_Conector_FC\\EDI_Conector_FC\\Clients\\Boozt\\INVOIC\\Error",
+
+    "OrdRspOutbox": "C:\\Proyectos SAP Business One\\Bellavista_Progrmas\\EDI_Conector_FC\\EDI_Conector_FC\\Clients\\Boozt\\ORDRSP\\Outbox",
+    "OrdRspProcessed": "C:\\Proyectos SAP Business One\\Bellavista_Progrmas\\EDI_Conector_FC\\EDI_Conector_FC\\Clients\\Boozt\\ORDRSP\\Processed",
+    "OrdRspError": "C:\\Proyectos SAP Business One\\Bellavista_Progrmas\\EDI_Conector_FC\\EDI_Conector_FC\\Clients\\Boozt\\ORDRSP\\Error"
   },
 
   "SapDefaults": {
@@ -52,5 +56,13 @@
     "FtpFolderInvoic": "/transactions/invoic/in",
     "MarcarComoEnviada": true,
     "VatIdComprador": "SE556710469901"
+  },
+
+  "OrdRsp": {
+    "Enabled": true,
+    "GlnRemitente": "8435720700008",
+    "GlnDestinatarioFallback": "",
+    "FtpFolderOrdRsp": "/transactions/ordrsp/in",
+    "MarcarComoEnviado": true
   }
 }

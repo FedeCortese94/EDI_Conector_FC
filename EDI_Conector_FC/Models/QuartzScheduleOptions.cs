@@ -6,6 +6,7 @@ namespace EDI_Conector_FC.Models
         //public string JobOrdersIn { get; set; } = "0 */1 * ? * *";
 		public string JobDesadvOut { get; set; } = "0 */2 * ? * *";
 		public string JobInvoicesOut { get; set; } = "0 */2 * ? * *";
+		public string JobOrdRspOut { get; set; } = "0 */2 * ? * *";
 
         // Nuevos
         public string JobOrdersEdiToCsv { get; set; } = "0 */5 * ? * *";
